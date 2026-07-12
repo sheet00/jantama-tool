@@ -40,10 +40,6 @@ function App() {
   }
 
   return <main className="app-shell">
-    <section className="hero-copy">
-      <div><h1>いま、何を切る？</h1><p className="lead">手牌から、シャンテン数と有効牌を見て最適な一打を探します。</p></div>
-      <div className="assumption"><span>◌</span><div><strong>一様分布モデル</strong><small>見えていない牌は均等に自摸すると仮定</small></div></div>
-    </section>
     <div className="workspace">
       <HandEditor hand={hand} counts={counts} historyLength={history.length} onAdd={addTile} onRemove={removeTile} onUndo={undo} onReset={reset} />
       <aside className="right-column"><AnalysisResults handLength={hand.length} analysis={analysis} /></aside>
