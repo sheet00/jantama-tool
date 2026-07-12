@@ -111,3 +111,19 @@ export function currentShanten(hand: Counts): number {
   }
   return best
 }
+
+export function currentWaits(hand: Counts, visible: Counts = Array(34).fill(0)): number[] {
+  const total = hand.reduce((sum, count) => sum + count, 0)
+  if (total === 14) {
+    const best = analyzeDiscards(hand, visible)[0]
+    return best?.shanten === 0 ? best.effectiveTiles : []
+  }
+  if (total !== 13 || standardShanten(hand) !== 0) return []
+
+  return Array.from({ length: 34 }, (_, tile) => tile).filter((tile) => {
+    if (4 - hand[tile] - visible[tile] <= 0) return false
+    const next = [...hand]
+    next[tile] += 1
+    return standardShanten(next) < 0
+  })
+}
