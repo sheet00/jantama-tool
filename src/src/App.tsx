@@ -6,21 +6,25 @@ import { INITIAL_HAND, toTileCounts } from './domain/tiles'
 import { analyzeDiscards, currentShanten, currentWaits } from './engine/mahjong'
 import { MahjongSoulTracker } from './tracker/client'
 
-type Snapshot = { hand: string[]; discardsBySeat: string[][]; meldsBySeat: string[][][] }
+type Snapshot = { hand: string[]; discardsBySeat: string[][]; meldsBySeat: string[][][]; ownSeat: number | null }
 
 function App() {
   const [hand, setHand] = useState(INITIAL_HAND)
   const [discardsBySeat, setDiscardsBySeat] = useState<string[][]>([[], [], [], []])
   const [meldsBySeat, setMeldsBySeat] = useState<string[][][]>([[], [], [], []])
+  const [ownSeat, setOwnSeat] = useState<number | null>(null)
   const [history, setHistory] = useState<Snapshot[]>([])
   const [browserStatus, setBrowserStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
   const [browserError, setBrowserError] = useState('')
   const tracker = useMemo(() => new MahjongSoulTracker(), [])
   const visibleBySeat = useMemo(() => discardsBySeat.map((row, seat) => [...row, ...meldsBySeat[seat].flat()]), [discardsBySeat, meldsBySeat])
   const visible = useMemo(() => visibleBySeat.flat(), [visibleBySeat])
-  const analysis = useMemo(() => analyzeDiscards(toTileCounts(hand), toTileCounts(visible)), [hand, visible])
-  const shanten = useMemo(() => currentShanten(toTileCounts(hand)), [hand])
-  const waits = useMemo(() => currentWaits(toTileCounts(hand), toTileCounts(visible)), [hand, visible])
+  const ownMelds = ownSeat === null ? [] : (meldsBySeat[ownSeat] ?? [])
+  const fixedMelds = ownMelds.length
+  const analysisHandLength = 14 - fixedMelds * 3
+  const analysis = useMemo(() => analyzeDiscards(toTileCounts(hand), toTileCounts(visible), fixedMelds), [hand, visible, fixedMelds])
+  const shanten = useMemo(() => currentShanten(toTileCounts(hand), fixedMelds), [hand, fixedMelds])
+  const waits = useMemo(() => currentWaits(toTileCounts(hand), toTileCounts(visible), fixedMelds), [hand, visible, fixedMelds])
 
   useEffect(() => () => tracker.disconnect(), [tracker])
 
@@ -39,6 +43,7 @@ function App() {
         if (snapshot.hand) setHand(snapshot.hand)
         setDiscardsBySeat(snapshot.discards)
         setMeldsBySeat(snapshot.melds)
+        setOwnSeat(snapshot.ownSeat)
       })
       await tracker.connect()
       setBrowserStatus('connected')
@@ -60,10 +65,10 @@ function App() {
     }
   }, [browserStatus, connectBrowser])
 
-  const saveHistory = () => setHistory((current) => [...current.slice(-9), { hand: [...hand], discardsBySeat: discardsBySeat.map((row) => [...row]), meldsBySeat: meldsBySeat.map((row) => row.map((meld) => [...meld])) }])
+  const saveHistory = () => setHistory((current) => [...current.slice(-9), { hand: [...hand], discardsBySeat: discardsBySeat.map((row) => [...row]), meldsBySeat: meldsBySeat.map((row) => row.map((meld) => [...meld])), ownSeat }])
 
   const removeTile = (id: string) => {
-    const isDiscard = hand.length === 14
+    const isDiscard = hand.length === analysisHandLength
     saveHistory()
     setHand((current) => {
       const index = current.indexOf(id)
@@ -100,20 +105,22 @@ function App() {
     setHand(previous.hand)
     setDiscardsBySeat(previous.discardsBySeat)
     setMeldsBySeat(previous.meldsBySeat)
+    setOwnSeat(previous.ownSeat)
   }
 
   const reset = () => {
     setHand([])
     setDiscardsBySeat([[], [], [], []])
     setMeldsBySeat([[], [], [], []])
+    setOwnSeat(null)
     setHistory([])
   }
 
   return <main className={`app-shell ${browserStatus === 'connected' ? 'connection-ready' : 'connection-unavailable'}`}>
     <div className="browser-connection"><div><strong>ブラウザ接続</strong><small>{browserStatus === 'connected' ? '雀魂のWebSocketを監視中' : browserStatus === 'connecting' ? '接続しています…' : browserError || 'Chromeを9222番ポートで起動してください'}</small></div><button className="connect-button" onClick={() => void connectBrowser()} disabled={browserStatus === 'connecting'}>{browserStatus === 'connected' ? '接続済み' : '接続する'}</button></div>
     <div className="workspace">
-      <HandEditor hand={hand} discardsBySeat={discardsBySeat} meldsBySeat={meldsBySeat} shanten={shanten} waits={waits} historyLength={history.length} onRemove={removeTile} onRemoveDiscard={removeDiscard} onRemoveMeldTile={removeMeldTile} onUndo={undo} onReset={reset} />
-      <aside className="right-column"><AnalysisResults handLength={hand.length} analysis={analysis} /></aside>
+      <HandEditor hand={hand} discardsBySeat={discardsBySeat} meldsBySeat={meldsBySeat} analysisHandLength={analysisHandLength} shanten={shanten} waits={waits} historyLength={history.length} onRemove={removeTile} onRemoveDiscard={removeDiscard} onRemoveMeldTile={removeMeldTile} onUndo={undo} onReset={reset} />
+      <aside className="right-column"><AnalysisResults handLength={hand.length} expectedHandLength={analysisHandLength} analysis={analysis} /></aside>
     </div>
     <footer><span>捨て牌と鳴きで公開された牌を見えている牌として考慮</span></footer>
   </main>
