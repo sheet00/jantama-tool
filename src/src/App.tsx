@@ -2,9 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { AnalysisResults } from './components/AnalysisResults'
 import { HandEditor } from './components/HandEditor'
-import { INITIAL_HAND, toTileCounts, type Tile } from './domain/tiles'
+import { INITIAL_HAND, toTileCounts } from './domain/tiles'
 import { analyzeDiscards, currentShanten, currentWaits } from './engine/mahjong'
-import type { Destination } from './components/TilePalette'
 import { MahjongSoulTracker } from './tracker/client'
 
 type Snapshot = { hand: string[]; visibleBySeat: string[][] }
@@ -12,13 +11,11 @@ type Snapshot = { hand: string[]; visibleBySeat: string[][] }
 function App() {
   const [hand, setHand] = useState(INITIAL_HAND)
   const [visibleBySeat, setVisibleBySeat] = useState<string[][]>([[], [], [], []])
-  const [destination, setDestination] = useState<Destination>('hand')
   const [history, setHistory] = useState<Snapshot[]>([])
   const [browserStatus, setBrowserStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
   const [browserError, setBrowserError] = useState('')
   const tracker = useMemo(() => new MahjongSoulTracker(), [])
   const visible = useMemo(() => visibleBySeat.flat(), [visibleBySeat])
-  const counts = useMemo(() => [...hand, ...visible].reduce<Record<string, number>>((all, id) => ({ ...all, [id]: (all[id] ?? 0) + 1 }), {}), [hand, visible])
   const analysis = useMemo(() => analyzeDiscards(toTileCounts(hand), toTileCounts(visible)), [hand, visible])
   const shanten = useMemo(() => currentShanten(toTileCounts(hand)), [hand])
   const waits = useMemo(() => currentWaits(toTileCounts(hand), toTileCounts(visible)), [hand, visible])
@@ -49,13 +46,6 @@ function App() {
   }
 
   const saveHistory = () => setHistory((current) => [...current.slice(-9), { hand: [...hand], visibleBySeat: visibleBySeat.map((row) => [...row]) }])
-
-  const addTile = (tile: Tile) => {
-    if ((destination === 'hand' && hand.length >= 14) || (counts[tile.id] ?? 0) >= 4) return
-    saveHistory()
-    if (destination === 'hand') setHand((current) => [...current, tile.id])
-    else setVisibleBySeat((current) => [[...current[0], tile.id], ...current.slice(1)])
-  }
 
   const removeTile = (id: string) => {
     const isDiscard = hand.length === 14
@@ -93,7 +83,7 @@ function App() {
   return <main className="app-shell">
     <div className="browser-connection"><div><strong>ブラウザ接続</strong><small>{browserStatus === 'connected' ? '雀魂のWebSocketを監視中' : browserStatus === 'connecting' ? '接続しています…' : browserError || 'Chromeを9222番ポートで起動してください'}</small></div><button className="connect-button" onClick={() => void connectBrowser()} disabled={browserStatus === 'connecting'}>{browserStatus === 'connected' ? '接続済み' : '接続する'}</button></div>
     <div className="workspace">
-      <HandEditor hand={hand} visibleBySeat={visibleBySeat} shanten={shanten} waits={waits} counts={counts} destination={destination} historyLength={history.length} onAdd={addTile} onRemove={removeTile} onRemoveVisible={removeVisibleTile} onDestinationChange={setDestination} onUndo={undo} onReset={reset} />
+      <HandEditor hand={hand} visibleBySeat={visibleBySeat} shanten={shanten} waits={waits} historyLength={history.length} onRemove={removeTile} onRemoveVisible={removeVisibleTile} onUndo={undo} onReset={reset} />
       <aside className="right-column"><AnalysisResults handLength={hand.length} analysis={analysis} /></aside>
     </div>
     <footer><span>通常手（4面子1雀頭）のみで計算</span><span>見えている牌・鳴き・点数状況は考慮していません</span></footer>
