@@ -5,6 +5,7 @@ export type TrackerSnapshot = {
   discards: string[][]
   ownSeat: number | null
   lastEvent: { action: string; seat: number | null; tile: string | null } | null
+  timestamp: number
 }
 
 export type TrackerListener = (snapshot: TrackerSnapshot) => void
@@ -72,6 +73,25 @@ export class MahjongSoulTracker {
     return this.socket?.readyState === WebSocket.OPEN
   }
 
+  snapshot(): TrackerSnapshot {
+    return {
+      hand: this.hand ? [...this.hand] : null,
+      discards: this.discards.map((row) => [...row]),
+      ownSeat: this.ownSeat,
+      lastEvent: this.lastEvent,
+      timestamp: Date.now(),
+    }
+  }
+
+  async persistSnapshot(): Promise<void> {
+    if (!this.isConnected()) return
+    await fetch('/tracker/snapshot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(this.snapshot()),
+    })
+  }
+
   private send(method: string, params: unknown): void {
     this.socket?.send(JSON.stringify({ id: ++this.requestId, method, params }))
   }
@@ -128,6 +148,6 @@ export class MahjongSoulTracker {
       return
     }
     this.lastEvent = { action: name, seat, tile }
-    this.listener?.({ hand: this.hand, discards: this.discards.map((row) => [...row]), ownSeat: this.ownSeat, lastEvent: this.lastEvent })
+    this.listener?.(this.snapshot())
   }
 }

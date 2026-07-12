@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Runtime tracker snapshots
+src/src/tracker/game.json
+src/src/tracker/game.json.tmp
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

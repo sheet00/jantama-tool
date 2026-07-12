@@ -7,16 +7,17 @@ import { analyzeDiscards, currentShanten, currentWaits } from './engine/mahjong'
 import type { Destination } from './components/TilePalette'
 import { MahjongSoulTracker } from './tracker/client'
 
-type Snapshot = { hand: string[]; visible: string[] }
+type Snapshot = { hand: string[]; visibleBySeat: string[][] }
 
 function App() {
   const [hand, setHand] = useState(INITIAL_HAND)
-  const [visible, setVisible] = useState<string[]>([])
+  const [visibleBySeat, setVisibleBySeat] = useState<string[][]>([[], [], [], []])
   const [destination, setDestination] = useState<Destination>('hand')
   const [history, setHistory] = useState<Snapshot[]>([])
   const [browserStatus, setBrowserStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
   const [browserError, setBrowserError] = useState('')
   const tracker = useMemo(() => new MahjongSoulTracker(), [])
+  const visible = useMemo(() => visibleBySeat.flat(), [visibleBySeat])
   const counts = useMemo(() => [...hand, ...visible].reduce<Record<string, number>>((all, id) => ({ ...all, [id]: (all[id] ?? 0) + 1 }), {}), [hand, visible])
   const analysis = useMemo(() => analyzeDiscards(toTileCounts(hand), toTileCounts(visible)), [hand, visible])
   const shanten = useMemo(() => currentShanten(toTileCounts(hand)), [hand])
@@ -24,13 +25,20 @@ function App() {
 
   useEffect(() => () => tracker.disconnect(), [tracker])
 
+  useEffect(() => {
+    if (browserStatus !== 'connected') return undefined
+    void tracker.persistSnapshot()
+    const interval = window.setInterval(() => void tracker.persistSnapshot(), 1000)
+    return () => window.clearInterval(interval)
+  }, [browserStatus, tracker])
+
   const connectBrowser = async () => {
     setBrowserStatus('connecting')
     setBrowserError('')
     try {
       tracker.onUpdate((snapshot) => {
         if (snapshot.hand) setHand(snapshot.hand)
-        setVisible(snapshot.discards.flat())
+        setVisibleBySeat(snapshot.discards)
       })
       await tracker.connect()
       setBrowserStatus('connected')
@@ -40,13 +48,13 @@ function App() {
     }
   }
 
-  const saveHistory = () => setHistory((current) => [...current.slice(-9), { hand: [...hand], visible: [...visible] }])
+  const saveHistory = () => setHistory((current) => [...current.slice(-9), { hand: [...hand], visibleBySeat: visibleBySeat.map((row) => [...row]) }])
 
   const addTile = (tile: Tile) => {
     if ((destination === 'hand' && hand.length >= 14) || (counts[tile.id] ?? 0) >= 4) return
     saveHistory()
     if (destination === 'hand') setHand((current) => [...current, tile.id])
-    else setVisible((current) => [...current, tile.id])
+    else setVisibleBySeat((current) => [[...current[0], tile.id], ...current.slice(1)])
   }
 
   const removeTile = (id: string) => {
@@ -56,15 +64,16 @@ function App() {
       const index = current.indexOf(id)
       return index === -1 ? current : [...current.slice(0, index), ...current.slice(index + 1)]
     })
-    if (isDiscard) setVisible((current) => [...current, id])
+    if (isDiscard) setVisibleBySeat((current) => [[...current[0], id], ...current.slice(1)])
   }
 
-  const removeVisibleTile = (id: string) => {
+  const removeVisibleTile = (id: string, seat = 0) => {
     saveHistory()
-    setVisible((current) => {
-      const index = current.indexOf(id)
-      return index === -1 ? current : [...current.slice(0, index), ...current.slice(index + 1)]
-    })
+    setVisibleBySeat((current) => current.map((row, rowIndex) => {
+      if (rowIndex !== seat) return row
+      const index = row.indexOf(id)
+      return index === -1 ? row : [...row.slice(0, index), ...row.slice(index + 1)]
+    }))
   }
 
   const undo = () => {
@@ -72,19 +81,19 @@ function App() {
     if (!previous) return
     setHistory((current) => current.slice(0, -1))
     setHand(previous.hand)
-    setVisible(previous.visible)
+    setVisibleBySeat(previous.visibleBySeat)
   }
 
   const reset = () => {
     setHand([])
-    setVisible([])
+    setVisibleBySeat([[], [], [], []])
     setHistory([])
   }
 
   return <main className="app-shell">
     <div className="browser-connection"><div><strong>ブラウザ接続</strong><small>{browserStatus === 'connected' ? '雀魂のWebSocketを監視中' : browserStatus === 'connecting' ? '接続しています…' : browserError || 'Chromeを9222番ポートで起動してください'}</small></div><button className="connect-button" onClick={() => void connectBrowser()} disabled={browserStatus === 'connecting'}>{browserStatus === 'connected' ? '接続済み' : '接続する'}</button></div>
     <div className="workspace">
-      <HandEditor hand={hand} visible={visible} shanten={shanten} waits={waits} counts={counts} destination={destination} historyLength={history.length} onAdd={addTile} onRemove={removeTile} onRemoveVisible={removeVisibleTile} onDestinationChange={setDestination} onUndo={undo} onReset={reset} />
+      <HandEditor hand={hand} visibleBySeat={visibleBySeat} shanten={shanten} waits={waits} counts={counts} destination={destination} historyLength={history.length} onAdd={addTile} onRemove={removeTile} onRemoveVisible={removeVisibleTile} onDestinationChange={setDestination} onUndo={undo} onReset={reset} />
       <aside className="right-column"><AnalysisResults handLength={hand.length} analysis={analysis} /></aside>
     </div>
     <footer><span>通常手（4面子1雀頭）のみで計算</span><span>見えている牌・鳴き・点数状況は考慮していません</span></footer>
