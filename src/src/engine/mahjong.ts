@@ -97,3 +97,17 @@ export function analyzeDiscards(hand: Counts, visible: Counts = Array(34).fill(0
 
   return results.sort((a, b) => a.shanten - b.shanten || b.effectiveTileCount - a.effectiveTileCount || b.effectiveTiles.length - a.effectiveTiles.length || a.discard - b.discard)
 }
+
+export function currentShanten(hand: Counts): number {
+  const total = hand.reduce((sum, count) => sum + count, 0)
+  if (total !== 14) return standardShanten(hand)
+
+  let best = 8
+  for (let discard = 0; discard < 34; discard += 1) {
+    if (hand[discard] === 0) continue
+    const afterDiscard = [...hand]
+    afterDiscard[discard] -= 1
+    best = Math.min(best, standardShanten(afterDiscard))
+  }
+  return best
+}
