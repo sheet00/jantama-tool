@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { AnalysisResults } from './components/AnalysisResults'
 import { HandEditor } from './components/HandEditor'
 import { INITIAL_HAND, toTileCounts, type Tile } from './domain/tiles'
 import { analyzeDiscards, currentShanten, currentWaits } from './engine/mahjong'
 import type { Destination } from './components/TilePalette'
+import { MahjongSoulTracker } from './tracker/client'
 
 type Snapshot = { hand: string[]; visible: string[] }
 
@@ -13,10 +14,31 @@ function App() {
   const [visible, setVisible] = useState<string[]>([])
   const [destination, setDestination] = useState<Destination>('hand')
   const [history, setHistory] = useState<Snapshot[]>([])
+  const [browserStatus, setBrowserStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
+  const [browserError, setBrowserError] = useState('')
+  const tracker = useMemo(() => new MahjongSoulTracker(), [])
   const counts = useMemo(() => [...hand, ...visible].reduce<Record<string, number>>((all, id) => ({ ...all, [id]: (all[id] ?? 0) + 1 }), {}), [hand, visible])
   const analysis = useMemo(() => analyzeDiscards(toTileCounts(hand), toTileCounts(visible)), [hand, visible])
   const shanten = useMemo(() => currentShanten(toTileCounts(hand)), [hand])
   const waits = useMemo(() => currentWaits(toTileCounts(hand), toTileCounts(visible)), [hand, visible])
+
+  useEffect(() => () => tracker.disconnect(), [tracker])
+
+  const connectBrowser = async () => {
+    setBrowserStatus('connecting')
+    setBrowserError('')
+    try {
+      tracker.onUpdate((snapshot) => {
+        if (snapshot.hand) setHand(snapshot.hand)
+        setVisible(snapshot.discards.flat())
+      })
+      await tracker.connect()
+      setBrowserStatus('connected')
+    } catch (error) {
+      setBrowserStatus('error')
+      setBrowserError(error instanceof Error ? error.message : 'ブラウザに接続できません')
+    }
+  }
 
   const saveHistory = () => setHistory((current) => [...current.slice(-9), { hand: [...hand], visible: [...visible] }])
 
@@ -60,6 +82,7 @@ function App() {
   }
 
   return <main className="app-shell">
+    <div className="browser-connection"><div><strong>ブラウザ接続</strong><small>{browserStatus === 'connected' ? '雀魂のWebSocketを監視中' : browserStatus === 'connecting' ? '接続しています…' : browserError || 'Chromeを9222番ポートで起動してください'}</small></div><button className="connect-button" onClick={() => void connectBrowser()} disabled={browserStatus === 'connecting'}>{browserStatus === 'connected' ? '接続済み' : '接続する'}</button></div>
     <div className="workspace">
       <HandEditor hand={hand} visible={visible} shanten={shanten} waits={waits} counts={counts} destination={destination} historyLength={history.length} onAdd={addTile} onRemove={removeTile} onRemoveVisible={removeVisibleTile} onDestinationChange={setDestination} onUndo={undo} onReset={reset} />
       <aside className="right-column"><AnalysisResults handLength={hand.length} analysis={analysis} /></aside>
