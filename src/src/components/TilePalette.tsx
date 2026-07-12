@@ -17,7 +17,7 @@ export function TilePalette({ handLength, counts, destination, onAdd }: Props) {
     {(['m', 'p', 's', 'z'] as Suit[]).map((suit) => <div className="palette-row" key={suit}>
       <span className={`suit-label suit-${suit}`}>{suitName[suit]}</span>
       <div>{TILES.filter((tile) => tile.suit === suit).map((tile) => <button key={tile.id} className={`tile tile-palette suit-${tile.suit}`} onClick={() => onAdd(tile)} disabled={(counts[tile.id] ?? 0) >= 4 || (destination === 'hand' && handLength >= 14)} aria-label={`${tile.label}を${destination === 'hand' ? '手牌' : '捨て牌'}に追加`}>
-        {tile.label}<i>{counts[tile.id] ? counts[tile.id] : ''}</i>
+        <img className="tile-art" src={`/tiles/${tile.asset}`} alt="" /><i>{counts[tile.id] ? counts[tile.id] : ''}</i>
       </button>)}</div>
     </div>)}
   </div>
