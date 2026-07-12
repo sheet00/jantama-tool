@@ -22,7 +22,7 @@
 - `src/src/tracker/client.ts`: Chrome CDP経由の雀魂WebSocket監視とイベントの状態反映
 - `src/src/tracker/protocol.ts`: protobuf風データの読み取り、Base64・XOR処理
 - `src/src/components/HandEditor.tsx`: 手牌、捨て牌、鳴き牌の表示と削除操作
-- `src/src/components/AnalysisResults.tsx`: 捨て牌候補の順位と有効牌の表示
+- `src/src/components/AnalysisResults.tsx`: 捨て牌候補の順位と有効牌の残り枚数の表示
 - `src/src/components/ShantenGauge.tsx`: 現在のシャンテン数と待ちの表示
 
 利用している構成は React、TypeScript、Vite である。状態管理は React state、計算はメインスレッド上の `useMemo` で行う。
@@ -47,6 +47,8 @@ npm run preview
 - 捨て牌と鳴き牌はクリックして削除できる。
 - 「元に戻す」は直近の状態を最大10件まで戻す。「すべてリセット」は手牌、捨て牌、鳴き牌、履歴を空にする。
 - 見えている牌は4座席の捨て牌と鳴き牌を合算して解析に渡す。
+- おすすめの捨て牌欄では、捨て牌、順位、シャンテン数、有効牌の残り枚数を表示する。有効牌の牌種一覧は表示しない。
+- シャンテン数と有効牌の残り枚数が同じ候補は同順位として表示し、同じ同順位グループを同じ色で表示する。
 - 牌パレット、手入力の文字列表記、ドラ表示牌専用入力、localStorage、JSON入出力は存在しない。
 
 ## 牌の内部表現

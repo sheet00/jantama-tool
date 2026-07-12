@@ -1,2 +1,8 @@
 :root { font-family: 'Noto Sans JP', sans-serif; color: #17211e; background: #f5f8f6; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
 body { margin: 0; min-width: 320px; }
+.result-card.result-card.tie-group-0 { border-color: #b8d6e7; background: #f4faff; }
+.result-card.result-card.tie-group-1 { border-color: #e5c59e; background: #fffaf3; }
+.result-card.result-card.tie-group-2 { border-color: #d0c0e2; background: #fbf8ff; }
+.result-card.tie-group-0 .rank { color: #4f86a7; }
+.result-card.tie-group-1 .rank { color: #b27b38; }
+.result-card.tie-group-2 .rank { color: #8061a4; }
