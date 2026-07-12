@@ -24,7 +24,7 @@ export function HandEditor({ hand, visible, shanten, counts, destination, histor
   const displayHand = drawnTile ? [...sortedHand, drawnTile] : sortedHand
 
   return <section className="panel input-panel">
-    <div className="panel-heading"><div><span className="step">01</span><div><h2>牌を入力</h2><p>手牌を選択してください</p></div></div><div className="heading-actions"><button className="text-button" onClick={onUndo} disabled={!historyLength}>↶ 元に戻す</button><button className="text-button" onClick={onReset}>すべてリセット ↺</button></div></div>
+    <div className="panel-heading"><div><span className="step">01</span><div><h2>牌を入力</h2></div></div><div className="heading-actions"><button className="text-button" onClick={onUndo} disabled={!historyLength}>↶ 元に戻す</button><button className="text-button" onClick={onReset}>すべてリセット ↺</button></div></div>
     <ShantenGauge shanten={shanten} handLength={hand.length} />
     <div className="visible-editor"><div className="subheading"><span>捨て牌・見えている牌</span><small>相手の捨て牌、ポン・チーで見えた牌</small></div><div className="tile-row visible-row">{visible.length ? visible.map((id, index) => <button key={`${id}-${index}`} className={`tile tile-small suit-${tileById(id).suit}`} onClick={() => onRemoveVisible(id)} aria-label={`${tileById(id).label}を捨て牌から削除`}><img className="tile-art" src={`/tiles/${tileById(id).asset}`} alt="" /></button>) : <span className="empty-state">まだ登録されていません</span>}</div></div>
     <div className="destination-tabs"><button className={destination === 'hand' ? 'active' : ''} onClick={() => onDestinationChange('hand')}>手牌 <b>{hand.length}/14</b></button><button className={destination === 'visible' ? 'active' : ''} onClick={() => onDestinationChange('visible')}>捨て牌 <b>{visible.length}</b></button></div>

@@ -8,6 +8,5 @@ export function ShantenGauge({ shanten, handLength }: Props) {
   return <div className="shanten-gauge" aria-label={`現在${displayShanten}`}>
     <div className="gauge-heading"><span>現在の手牌</span><strong>{handLength ? displayShanten : '—'}</strong></div>
     <div className="gauge-track"><span style={{ width: `${handLength ? progress : 0}%` }} /></div>
-    <div className="gauge-scale"><span>遠い</span><span>テンパイ</span></div>
   </div>
 }
