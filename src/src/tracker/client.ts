@@ -1,5 +1,9 @@
 import { bytes, decodeBase64, fields, text, xorAction } from './protocol'
 
+const AUTH_GAME = '.lq.FastTest.authGame'
+const SYNC_GAME = '.lq.FastTest.syncGame'
+const ENTER_GAME = '.lq.FastTest.enterGame'
+
 export type TrackerSnapshot = {
   hand: string[] | null
   discards: string[][]
@@ -63,9 +67,29 @@ function removeTiles(hand: string[], tiles: string[]): string[] {
   return remaining.sort((left, right) => SORT_ORDER.indexOf(left) - SORT_ORDER.indexOf(right))
 }
 
+type FrameInfo = { kind: number; id: number | null; wrapper: ReturnType<typeof fields> }
+
+function decodeFrame(frame: Uint8Array): FrameInfo | null {
+  const kind = frame[0]
+  const offset = kind === 1 ? 1 : kind === 2 || kind === 3 ? 3 : 0
+  if (!offset || frame.length < offset) return null
+  const id = kind === 1 ? null : frame[1] | (frame[2] << 8)
+  return { kind, id, wrapper: fields(frame.slice(offset)) }
+}
+
+function fieldText(data: ReturnType<typeof fields>, number: number): string | null {
+  return text(data.find((field) => field.number === number)?.value ?? 0)
+}
+
+function fieldBytes(data: ReturnType<typeof fields>, number: number): Uint8Array | null {
+  return bytes(data.find((field) => field.number === number)?.value ?? 0)
+}
+
 export class MahjongSoulTracker {
   private socket: WebSocket | null = null
   private requestId = 0
+  private pendingRequests = new Map<number, string>()
+  private pendingAuthAccounts = new Map<number, number>()
   private hand: string[] | null = null
   private ownSeat: number | null = null
   private discards = [[], [], [], []] as string[][]
@@ -104,6 +128,8 @@ export class MahjongSoulTracker {
   disconnect(): void {
     this.socket?.close()
     this.socket = null
+    this.pendingRequests.clear()
+    this.pendingAuthAccounts.clear()
   }
 
   isConnected(): boolean {
@@ -136,36 +162,87 @@ export class MahjongSoulTracker {
 
   private handleMessage(raw: unknown): void {
     if (typeof raw !== 'string') return
-    const message = JSON.parse(raw) as { method?: string; params?: { response?: { opcode?: number; payloadData?: string } } }
-    if (message.method !== 'Network.webSocketFrameReceived' || message.params?.response?.opcode !== 2) return
-    const payload = message.params.response.payloadData
+    const message = JSON.parse(raw) as { method?: string; params?: { response?: { opcode?: number; payloadData?: string }; request?: { opcode?: number; payloadData?: string } } }
+    const sent = message.method === 'Network.webSocketFrameSent'
+    const received = message.method === 'Network.webSocketFrameReceived'
+    if (!sent && !received) return
+    const frameData = message.params?.response ?? message.params?.request
+    if (frameData?.opcode !== 2) return
+    const payload = frameData.payloadData
     if (!payload) return
     try {
-      const action = this.decodeAction(decodeBase64(payload))
-      if (action) this.applyAction(action.name, action.data)
+      const frame = decodeBase64(payload)
+      if (sent) this.handleSentFrame(frame)
+      if (received) this.handleReceivedFrame(frame)
     } catch {
       // Ignore unrelated or protocol-version-specific frames.
     }
   }
 
-  private decodeAction(frame: Uint8Array): { name: string; data: Uint8Array } | null {
-    const offset = frame[0] === 1 ? 1 : frame[0] === 2 || frame[0] === 3 ? 3 : 0
-    if (!offset) return null
-    const wrapper = fields(frame.slice(offset))
-    const method = wrapper.find((field) => field.number === 1)?.value
-    if (method === undefined || text(method) !== '.lq.ActionPrototype') return null
-    const payload = bytes(wrapper.find((field) => field.number === 2)?.value ?? 0)
-    if (!payload) return null
-    const prototype = fields(payload)
-    const name = text(prototype.find((field) => field.number === 2)?.value ?? 0)
-    const encrypted = bytes(prototype.find((field) => field.number === 3)?.value ?? 0)
-    return name && encrypted ? { name, data: xorAction(encrypted) } : null
+  private handleSentFrame(frame: Uint8Array): void {
+    const decoded = decodeFrame(frame)
+    if (!decoded || decoded.kind !== 2 || decoded.id === null) return
+    const method = fieldText(decoded.wrapper, 1)
+    if (!method || ![AUTH_GAME, SYNC_GAME, ENTER_GAME].includes(method)) return
+    this.pendingRequests.set(decoded.id, method)
+    if (method === AUTH_GAME) {
+      const request = fieldBytes(decoded.wrapper, 2)
+      const accountId = request ? numberFields(fields(request), 1)[0] : undefined
+      if (accountId !== undefined) this.pendingAuthAccounts.set(decoded.id, accountId)
+    }
+  }
+
+  private handleReceivedFrame(frame: Uint8Array): void {
+    const decoded = decodeFrame(frame)
+    if (!decoded) return
+    if (decoded.kind === 1) {
+      const method = fieldText(decoded.wrapper, 1)
+      if (method !== '.lq.ActionPrototype') return
+      const payload = fieldBytes(decoded.wrapper, 2)
+      if (!payload) return
+      const prototype = fields(payload)
+      const name = fieldText(prototype, 2)
+      const encrypted = fieldBytes(prototype, 3)
+      if (name && encrypted) this.applyAction(name, xorAction(encrypted))
+      return
+    }
+    if (decoded.kind !== 3 || decoded.id === null) return
+    const method = this.pendingRequests.get(decoded.id)
+    this.pendingRequests.delete(decoded.id)
+    const data = fieldBytes(decoded.wrapper, 2)
+    if (!method || !data) return
+    if (method === AUTH_GAME) {
+      const accountId = this.pendingAuthAccounts.get(decoded.id)
+      this.pendingAuthAccounts.delete(decoded.id)
+      if (accountId !== undefined) this.applyAuthResponse(data, accountId)
+    } else if (method === SYNC_GAME || method === ENTER_GAME) {
+      this.applyGameRestore(data)
+    }
+  }
+
+  private applyAuthResponse(data: Uint8Array, accountId: number): void {
+    const seatList = numberFields(fields(data), 3)
+    const seat = seatList.indexOf(accountId)
+    if (seat < 0) return
+    this.ownSeat = seat
+    this.listener?.(this.snapshot())
+  }
+
+  private applyGameRestore(data: Uint8Array): void {
+    const restore = fieldBytes(fields(data), 4)
+    if (!restore) return
+    for (const actionField of fields(restore).filter((field) => field.number === 2 && field.wireType === 2)) {
+      const action = fields(actionField.value as Uint8Array)
+      const name = fieldText(action, 2)
+      const actionData = fieldBytes(action, 3)
+      if (name && actionData) this.applyAction(name, actionData)
+    }
   }
 
   private applyAction(name: string, data: Uint8Array): void {
     const action = fields(data)
     const seatValue = action.find((field) => field.number === 1)?.value
-    const seat = typeof seatValue === 'number' ? seatValue : null
+    const seat = typeof seatValue === 'number' ? seatValue : 0
     const tile = appTile(text(action.find((field) => field.number === 2)?.value ?? 0))
     if (name === 'ActionNewRound') {
       const initial = stringFields(action, 4).map(appTile).filter((value): value is string => value !== null)
@@ -173,7 +250,7 @@ export class MahjongSoulTracker {
       this.discards = [[], [], [], []]
       this.melds = [[], [], [], []]
       const dealer = action.find((field) => field.number === 2)?.value
-      if (initial.length === 14 && typeof dealer === 'number') this.ownSeat = dealer
+      if (this.ownSeat === null && initial.length === 14 && typeof dealer === 'number' && dealer < this.discards.length) this.ownSeat = dealer
     } else if (name === 'ActionDealTile' && tile && seat !== null) {
       if (this.ownSeat === null) this.ownSeat = seat
       if (seat === this.ownSeat) this.hand = [...(this.hand ?? []), tile].sort((left, right) => SORT_ORDER.indexOf(left) - SORT_ORDER.indexOf(right))

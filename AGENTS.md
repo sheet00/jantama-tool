@@ -139,8 +139,12 @@ npm run preview
 - `ActionDiscardTile`: 座席の河に牌を追加し、自分の手牌から捨て牌を削除
 - `ActionChiPengGang`: 河から鳴かれた牌を削除し、鳴き面子を追加
 - `ActionAnGangAddGang`: 暗槓・加槓・明槓の状態を記録
+- `authGame` の送受信: `account_id` と `seat_list` から自分の座席を確定
+- `syncGame` / `enterGame`: `GameRestore.actions` を再生して、途中接続時の局状態を復元
 
 プロトコルの解析に失敗したフレームや関係のないフレームは無視する。
+
+`ActionNewRound` の field 2 は親の座席（`ju`）であり、常に自分の座席ではない。通常は `authGame` の `account_id` と `seat_list` から自分の座席を確定する。途中接続時は、配牌14枚なら `ju` を自分の座席とみなし、配牌13枚なら実牌を含む自摸イベントの座席を補助的に使う。
 
 ## 変更時の注意
 
