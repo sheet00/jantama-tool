@@ -73,7 +73,7 @@ export function standardShanten(input: Counts): number {
   return best
 }
 
-export function analyzeDiscards(hand: Counts): DiscardAnalysis[] {
+export function analyzeDiscards(hand: Counts, visible: Counts = Array(34).fill(0)): DiscardAnalysis[] {
   if (hand.reduce((total, count) => total + count, 0) !== 14) return []
   const results: DiscardAnalysis[] = []
 
@@ -85,13 +85,13 @@ export function analyzeDiscards(hand: Counts): DiscardAnalysis[] {
     const effectiveTiles: number[] = []
 
     for (let draw = 0; draw < 34; draw += 1) {
-      if (afterDiscard[draw] >= 4) continue
+      if (4 - afterDiscard[draw] - visible[draw] <= 0) continue
       const afterDraw = [...afterDiscard]
       afterDraw[draw] += 1
       if (standardShanten(afterDraw) < shanten) effectiveTiles.push(draw)
     }
 
-    const effectiveTileCount = effectiveTiles.reduce((total, tile) => total + 4 - afterDiscard[tile], 0)
+    const effectiveTileCount = effectiveTiles.reduce((total, tile) => total + 4 - afterDiscard[tile] - visible[tile], 0)
     results.push({ discard, shanten, effectiveTiles, effectiveTileCount })
   }
 
