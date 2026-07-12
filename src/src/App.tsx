@@ -23,19 +23,16 @@ const initialHand = ['2m', '3m', '4m', '6m', '7m', '2p', '3p', '5p', '7p', '2s',
 const initialVisible: string[] = []
 
 const sampleResults = [
-  { tile: '6s', label: '6索', shanten: 1, effective: '3種 9枚', tenpai: '68.4%', win: '12.8%', wait: '74%' },
-  { tile: '7p', label: '7筒', shanten: 1, effective: '4種 12枚', tenpai: '65.1%', win: '11.9%', wait: '69%' },
-  { tile: '2s', label: '2索', shanten: 1, effective: '4種 13枚', tenpai: '63.7%', win: '11.4%', wait: '67%' },
-  { tile: '4s', label: '4索', shanten: 1, effective: '3種 10枚', tenpai: '61.8%', win: '10.7%', wait: '63%' },
+  { tile: '6s', label: '6索', shanten: 1, effective: '3種 · 9枚', detail: '受け入れ最大' },
+  { tile: '7p', label: '7筒', shanten: 1, effective: '4種 · 12枚', detail: 'シャンテン維持' },
+  { tile: '2s', label: '2索', shanten: 1, effective: '4種 · 13枚', detail: '受け入れ最大' },
+  { tile: '4s', label: '4索', shanten: 1, effective: '3種 · 10枚', detail: '形を維持' },
 ]
 
 function App() {
   const [destination, setDestination] = useState<Destination>('hand')
   const [hand, setHand] = useState(initialHand)
   const [visible, setVisible] = useState(initialVisible)
-  const [futureDraws, setFutureDraws] = useState(8)
-  const [simulations, setSimulations] = useState('5,000')
-  const [ranking, setRanking] = useState('win')
   const [history, setHistory] = useState<string[][]>([])
 
   const counts = useMemo(() => [...hand, ...visible].reduce<Record<string, number>>((all, id) => ({ ...all, [id]: (all[id] ?? 0) + 1 }), {}), [hand, visible])
@@ -72,13 +69,8 @@ function App() {
 
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <div className="brand"><span className="brand-mark">牌</span><div><strong>麻雀解析室</strong><small>RIICHI ANALYZER</small></div></div>
-        <div className="topbar-actions"><span className="status-dot" /> <span>自動保存済み</span><button className="icon-button" aria-label="設定">⚙</button></div>
-      </header>
-
       <section className="hero-copy">
-        <div><p className="eyebrow">DISCARD ANALYSIS / 01</p><h1>いま、何を切る？</h1><p className="lead">手牌と見えている牌から、最も和了に近づく一打を解析します。</p></div>
+        <div><h1>いま、何を切る？</h1><p className="lead">手牌から、シャンテン数と有効牌を見て最適な一打を探します。</p></div>
         <div className="assumption"><span>◌</span><div><strong>一様分布モデル</strong><small>見えていない牌は均等に自摸すると仮定</small></div></div>
       </section>
 
@@ -92,9 +84,9 @@ function App() {
         </section>
 
         <aside className="right-column">
-          <section className="panel settings-panel"><div className="panel-heading compact"><div><span className="step">02</span><div><h2>解析条件</h2><p>シミュレーションの設定</p></div></div><span className="live-pill">LIVE</span></div><label>今後の自摸回数 <output>{futureDraws} 回</output><input type="range" min="1" max="18" value={futureDraws} onChange={(event) => setFutureDraws(Number(event.target.value))} /></label><div className="control-grid"><label>シミュレーション<select value={simulations} onChange={(event) => setSimulations(event.target.value)}><option>5,000</option><option>10,000</option><option>50,000</option></select></label><label>ランキング指標<select value={ranking} onChange={(event) => setRanking(event.target.value)}><option value="win">和了確率</option><option value="tenpai">テンパイ確率</option><option value="effective">有効牌の枚数</option></select></label></div><button className="advanced">詳細設定 <span>⌄</span></button></section>
+          <section className="panel settings-panel"><div className="panel-heading compact"><div><span className="step">02</span><div><h2>最適解を確認</h2><p>受け入れ枚数とシャンテン数で比較</p></div></div><span className="live-pill">EXACT</span></div><div className="method-card"><span className="method-icon">↗</span><div><strong>受け入れ最大でランキング</strong><small>同じシャンテン数なら、有効牌の枚数が多い順に表示します。</small></div></div><div className="rule-list"><div><span>1</span><p>シャンテン数を最小化</p></div><div><span>2</span><p>有効牌の枚数を最大化</p></div><div><span>3</span><p>同率なら形の良さで判定</p></div></div></section>
 
-          <section className="panel results-panel"><div className="panel-heading compact"><div><span className="step">03</span><div><h2>解析結果</h2><p>{simulations}回のシミュレーション · {futureDraws}自摸</p></div></div><span className="calculating"><i />計算済み</span></div><div className="result-list">{sampleResults.map((result, index) => <article className={`result-card ${index === 0 ? 'best' : ''}`} key={result.tile}><div className="rank">{String(index + 1).padStart(2, '0')}</div><div className="result-tile tile tile-small">{result.label}</div><div className="result-main"><div className="result-title"><strong>{index === 0 ? '最有力' : '候補'}</strong><span>{result.shanten}シャンテン</span></div><div className="result-stats"><span><b>{result.win}</b> 和了</span><span><b>{result.tenpai}</b> テンパイ</span><span>{result.effective}</span></div></div><div className="result-arrow">→</div></article>)}</div><div className="result-footer"><span>結果は推定値です</span><button className="text-button">詳しい指標を見る →</button></div></section>
+          <section className="panel results-panel"><div className="panel-heading compact"><div><span className="step">03</span><div><h2>解析結果</h2><p>この手牌から切る候補を比較</p></div></div><span className="calculating"><i />計算済み</span></div><div className="result-list">{sampleResults.map((result, index) => <article className={`result-card ${index === 0 ? 'best' : ''}`} key={result.tile}><div className="rank">{String(index + 1).padStart(2, '0')}</div><div className="result-tile tile tile-small">{result.label}</div><div className="result-main"><div className="result-title"><strong>{index === 0 ? '最有力' : '候補'}</strong><span>{result.shanten}シャンテン</span></div><div className="result-stats"><span><b>{result.effective}</b> 有効牌</span><span>{result.detail}</span></div></div><div className="result-arrow">→</div></article>)}</div><div className="result-footer"><span>牌効率による暫定結果</span><button className="text-button">指標の詳細 →</button></div></section>
         </aside>
       </div>
       <footer><span>麻雀解析室 <b>v0.1</b></span><span>相手の手牌・鳴き・点数状況は考慮していません</span></footer>
