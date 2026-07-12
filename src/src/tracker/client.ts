@@ -27,6 +27,19 @@ function stringFields(data: ReturnType<typeof fields>, number: number): string[]
   return data.filter((field) => field.number === number && field.wireType === 2).map((field) => text(field.value)).filter((value): value is string => value !== null)
 }
 
+function numberFields(data: ReturnType<typeof fields>, number: number): number[] {
+  return data.filter((field) => field.number === number && field.wireType === 0).map((field) => field.value).filter((value): value is number => typeof value === 'number')
+}
+
+function removeTiles(hand: string[], tiles: string[]): string[] {
+  const remaining = [...hand]
+  for (const tile of tiles) {
+    const index = remaining.indexOf(tile)
+    if (index >= 0) remaining.splice(index, 1)
+  }
+  return remaining.sort((left, right) => SORT_ORDER.indexOf(left) - SORT_ORDER.indexOf(right))
+}
+
 export class MahjongSoulTracker {
   private socket: WebSocket | null = null
   private requestId = 0
@@ -144,10 +157,47 @@ export class MahjongSoulTracker {
         const index = this.hand.indexOf(tile)
         if (index >= 0) this.hand = [...this.hand.slice(0, index), ...this.hand.slice(index + 1)]
       }
+    } else if (name === 'ActionChiPengGang' && seat !== null) {
+      const meldType = action.find((field) => field.number === 2)?.value
+      const tiles = stringFields(action, 3).map(appTile).filter((value): value is string => value !== null)
+      const froms = numberFields(action, 4)
+      if (typeof meldType !== 'number' || tiles.length !== froms.length || tiles.length === 0 || seat >= this.discards.length) return
+
+      const calledIndex = froms.findIndex((from) => from !== seat)
+      if (calledIndex < 0 || calledIndex >= tiles.length) return
+      const calledTile = tiles[calledIndex]
+      const sourceSeat = froms[calledIndex]
+      if (sourceSeat < 0 || sourceSeat >= this.discards.length) return
+
+      this.discards[sourceSeat] = removeOne(this.discards[sourceSeat], calledTile)
+      this.discards[seat] = [...this.discards[seat], ...tiles]
+      if (seat === this.ownSeat && this.hand) {
+        this.hand = removeTiles(this.hand, tiles.filter((_, index) => froms[index] === seat))
+      }
+      this.lastEvent = { action: name, seat, tile: calledTile }
+      this.listener?.(this.snapshot())
+      return
+    } else if (name === 'ActionAnGangAddGang' && seat !== null && seat < this.discards.length) {
+      const meldType = action.find((field) => field.number === 2)?.value
+      const meldTile = appTile(text(action.find((field) => field.number === 3)?.value ?? 0))
+      if (typeof meldType !== 'number' || !meldTile) return
+
+      const meldTiles = meldType === 3 ? [meldTile, meldTile, meldTile, meldTile] : meldType === 2 ? [meldTile] : []
+      if (meldTiles.length === 0) return
+      this.discards[seat] = [...this.discards[seat], ...meldTiles]
+      if (seat === this.ownSeat && this.hand) this.hand = removeTiles(this.hand, meldTiles)
+      this.lastEvent = { action: name, seat, tile: meldTile }
+      this.listener?.(this.snapshot())
+      return
     } else {
       return
     }
     this.lastEvent = { action: name, seat, tile }
     this.listener?.(this.snapshot())
   }
+}
+
+function removeOne(tiles: string[], target: string): string[] {
+  const index = tiles.indexOf(target)
+  return index < 0 ? tiles : [...tiles.slice(0, index), ...tiles.slice(index + 1)]
 }

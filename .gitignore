@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Reference repository
+Akagi/
+
 # Runtime tracker snapshots
 src/src/tracker/game.json
 src/src/tracker/game.json.tmp

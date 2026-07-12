@@ -86,7 +86,7 @@ function App() {
       <HandEditor hand={hand} visibleBySeat={visibleBySeat} shanten={shanten} waits={waits} historyLength={history.length} onRemove={removeTile} onRemoveVisible={removeVisibleTile} onUndo={undo} onReset={reset} />
       <aside className="right-column"><AnalysisResults handLength={hand.length} analysis={analysis} /></aside>
     </div>
-    <footer><span>通常手（4面子1雀頭）のみで計算</span><span>見えている牌・鳴き・点数状況は考慮していません</span></footer>
+    <footer><span>通常手（4面子1雀頭）のみで計算</span><span>捨て牌と鳴きで公開された牌を見えている牌として考慮</span></footer>
   </main>
 }
 
