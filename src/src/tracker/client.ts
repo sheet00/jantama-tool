@@ -3,6 +3,7 @@ import { bytes, decodeBase64, fields, text, xorAction } from './protocol'
 export type TrackerSnapshot = {
   hand: string[] | null
   discards: string[][]
+  melds: string[][][]
   ownSeat: number | null
   lastEvent: { action: string; seat: number | null; tile: string | null } | null
   timestamp: number
@@ -28,7 +29,29 @@ function stringFields(data: ReturnType<typeof fields>, number: number): string[]
 }
 
 function numberFields(data: ReturnType<typeof fields>, number: number): number[] {
-  return data.filter((field) => field.number === number && field.wireType === 0).map((field) => field.value).filter((value): value is number => typeof value === 'number')
+  return data.filter((field) => field.number === number).flatMap((field) => {
+    if (field.wireType === 0 && typeof field.value === 'number') return [field.value]
+    if (field.wireType === 2 && typeof field.value !== 'number') return packedVarints(field.value)
+    return []
+  })
+}
+
+function packedVarints(bytes: Uint8Array): number[] {
+  const result: number[] = []
+  let value = 0
+  let shift = 0
+  for (const byte of bytes) {
+    value |= (byte & 0x7f) << shift
+    if ((byte & 0x80) === 0) {
+      result.push(value >>> 0)
+      value = 0
+      shift = 0
+    } else {
+      shift += 7
+    }
+  }
+  if (shift !== 0) throw new Error('Truncated packed varint field')
+  return result
 }
 
 function removeTiles(hand: string[], tiles: string[]): string[] {
@@ -46,6 +69,7 @@ export class MahjongSoulTracker {
   private hand: string[] | null = null
   private ownSeat: number | null = null
   private discards = [[], [], [], []] as string[][]
+  private melds = [[], [], [], []] as string[][][]
   private lastEvent: TrackerSnapshot['lastEvent'] = null
   private listener: TrackerListener | null = null
 
@@ -90,6 +114,7 @@ export class MahjongSoulTracker {
     return {
       hand: this.hand ? [...this.hand] : null,
       discards: this.discards.map((row) => [...row]),
+      melds: this.melds.map((row) => row.map((meld) => [...meld])),
       ownSeat: this.ownSeat,
       lastEvent: this.lastEvent,
       timestamp: Date.now(),
@@ -146,6 +171,7 @@ export class MahjongSoulTracker {
       const initial = stringFields(action, 4).map(appTile).filter((value): value is string => value !== null)
       this.hand = initial.sort((left, right) => SORT_ORDER.indexOf(left) - SORT_ORDER.indexOf(right))
       this.discards = [[], [], [], []]
+      this.melds = [[], [], [], []]
       const dealer = action.find((field) => field.number === 2)?.value
       if (initial.length === 14 && typeof dealer === 'number') this.ownSeat = dealer
     } else if (name === 'ActionDealTile' && tile && seat !== null) {
@@ -170,7 +196,7 @@ export class MahjongSoulTracker {
       if (sourceSeat < 0 || sourceSeat >= this.discards.length) return
 
       this.discards[sourceSeat] = removeOne(this.discards[sourceSeat], calledTile)
-      this.discards[seat] = [...this.discards[seat], ...tiles]
+      this.melds[seat] = [...this.melds[seat], tiles]
       if (seat === this.ownSeat && this.hand) {
         this.hand = removeTiles(this.hand, tiles.filter((_, index) => froms[index] === seat))
       }
@@ -184,7 +210,16 @@ export class MahjongSoulTracker {
 
       const meldTiles = meldType === 3 ? [meldTile, meldTile, meldTile, meldTile] : meldType === 2 ? [meldTile] : []
       if (meldTiles.length === 0) return
-      this.discards[seat] = [...this.discards[seat], ...meldTiles]
+      if (meldType === 2) {
+        const ponIndex = this.melds[seat].findIndex((meld) => meld.length === 3 && meld.every((value) => value === meldTile))
+        if (ponIndex >= 0) {
+          this.melds[seat] = this.melds[seat].map((meld, index) => index === ponIndex ? [...meld, meldTile] : meld)
+        } else {
+          this.melds[seat] = [...this.melds[seat], meldTiles]
+        }
+      } else {
+        this.melds[seat] = [...this.melds[seat], meldTiles]
+      }
       if (seat === this.ownSeat && this.hand) this.hand = removeTiles(this.hand, meldTiles)
       this.lastEvent = { action: name, seat, tile: meldTile }
       this.listener?.(this.snapshot())

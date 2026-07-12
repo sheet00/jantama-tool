@@ -25,7 +25,8 @@ docker compose up -d
 - `ActionDiscardTile` から全4座席の捨て牌を取得
 - `ActionChiPengGang` / `ActionAnGangAddGang` からチー、ポン、明槓、暗槓、加槓を取得
 - 鳴かれた牌を元の河から除き、鳴きで公開された牌を鳴いた座席の見えている牌へ移動
-- 捨て牌と鳴きで公開された牌は座席1〜4の4配列として表示・解析時に合算
+- 捨て牌と鳴き牌を分けて保持し、鳴き牌は河の右側に寄せて表示
+- 捨て牌と鳴きで公開された牌は解析時に合算
 - 捨て牌・見えている牌の欄はデフォルトで閉じた状態
 - 取得した状態を1秒ごとにJSON保存
 - JSONは `src/src/tracker/game.json` に保存し、Git管理対象外
@@ -40,6 +41,7 @@ docker compose up -d
 {
   "hand": ["2m", "3m"],
   "discards": [[], [], [], []],
+  "melds": [[], [], [], []],
   "ownSeat": 0,
   "lastEvent": {
     "action": "ActionDiscardTile",
