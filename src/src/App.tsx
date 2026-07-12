@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import './App.css'
 import { AnalysisResults } from './components/AnalysisResults'
-import { AnalysisRules } from './components/AnalysisRules'
 import { HandEditor } from './components/HandEditor'
 import { INITIAL_HAND, toTileCounts, type Tile } from './domain/tiles'
 import { analyzeDiscards } from './engine/mahjong'
@@ -47,7 +46,7 @@ function App() {
     </section>
     <div className="workspace">
       <HandEditor hand={hand} counts={counts} historyLength={history.length} onAdd={addTile} onRemove={removeTile} onUndo={undo} onReset={reset} />
-      <aside className="right-column"><AnalysisRules /><AnalysisResults handLength={hand.length} analysis={analysis} /></aside>
+      <aside className="right-column"><AnalysisResults handLength={hand.length} analysis={analysis} /></aside>
     </div>
     <footer><span>通常手（4面子1雀頭）のみで計算</span><span>見えている牌・鳴き・点数状況は考慮していません</span></footer>
   </main>
