@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { AnalysisResults } from './components/AnalysisResults'
+import { DangerResults } from './components/DangerResults'
 import { HandEditor } from './components/HandEditor'
 import { INITIAL_HAND, toTileCounts } from './domain/tiles'
 import { analyzeDiscards, currentShanten, currentWaits } from './engine/mahjong'
+import { analyzeDanger } from './engine/danger'
 import { MahjongSoulTracker } from './tracker/client'
 
-type Snapshot = { hand: string[]; discardsBySeat: string[][]; meldsBySeat: string[][][]; ownSeat: number | null }
+type Snapshot = { hand: string[]; discardsBySeat: string[][]; discardCountBySeat: number[]; meldsBySeat: string[][][]; riichiBySeat: boolean[]; postRiichiSafeBySeat: string[][]; ownSeat: number | null }
 
 function App() {
   const [hand, setHand] = useState(INITIAL_HAND)
   const [discardsBySeat, setDiscardsBySeat] = useState<string[][]>([[], [], [], []])
+  const [discardCountBySeat, setDiscardCountBySeat] = useState<number[]>([0, 0, 0, 0])
   const [meldsBySeat, setMeldsBySeat] = useState<string[][][]>([[], [], [], []])
+  const [riichiBySeat, setRiichiBySeat] = useState<boolean[]>([false, false, false, false])
+  const [postRiichiSafeBySeat, setPostRiichiSafeBySeat] = useState<string[][]>([[], [], [], []])
   const [ownSeat, setOwnSeat] = useState<number | null>(null)
   const [history, setHistory] = useState<Snapshot[]>([])
   const [browserStatus, setBrowserStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
@@ -25,6 +30,7 @@ function App() {
   const analysis = useMemo(() => analyzeDiscards(toTileCounts(hand), toTileCounts(visible), fixedMelds), [hand, visible, fixedMelds])
   const shanten = useMemo(() => currentShanten(toTileCounts(hand), fixedMelds), [hand, fixedMelds])
   const waits = useMemo(() => currentWaits(toTileCounts(hand), toTileCounts(visible), fixedMelds), [hand, visible, fixedMelds])
+  const dangerAssessments = useMemo(() => analyzeDanger(hand, discardsBySeat, discardCountBySeat, meldsBySeat, riichiBySeat, postRiichiSafeBySeat, ownSeat), [hand, discardsBySeat, discardCountBySeat, meldsBySeat, riichiBySeat, postRiichiSafeBySeat, ownSeat])
 
   useEffect(() => () => tracker.disconnect(), [tracker])
 
@@ -42,9 +48,13 @@ function App() {
       tracker.onUpdate((snapshot) => {
         if (snapshot.hand) setHand(snapshot.hand)
         setDiscardsBySeat(snapshot.discards)
+        setDiscardCountBySeat(snapshot.discardCountBySeat)
         setMeldsBySeat(snapshot.melds)
+        setRiichiBySeat(snapshot.riichiBySeat)
+        setPostRiichiSafeBySeat(snapshot.postRiichiSafeBySeat)
         setOwnSeat(snapshot.ownSeat)
       })
+      await tracker.restoreSnapshot()
       await tracker.connect()
       setBrowserStatus('connected')
     } catch (error) {
@@ -65,7 +75,7 @@ function App() {
     }
   }, [browserStatus, connectBrowser])
 
-  const saveHistory = () => setHistory((current) => [...current.slice(-9), { hand: [...hand], discardsBySeat: discardsBySeat.map((row) => [...row]), meldsBySeat: meldsBySeat.map((row) => row.map((meld) => [...meld])), ownSeat }])
+  const saveHistory = () => setHistory((current) => [...current.slice(-9), { hand: [...hand], discardsBySeat: discardsBySeat.map((row) => [...row]), discardCountBySeat: [...discardCountBySeat], meldsBySeat: meldsBySeat.map((row) => row.map((meld) => [...meld])), riichiBySeat: [...riichiBySeat], postRiichiSafeBySeat: postRiichiSafeBySeat.map((row) => [...row]), ownSeat }])
 
   const removeTile = (id: string) => {
     const isDiscard = hand.length === analysisHandLength
@@ -74,11 +84,15 @@ function App() {
       const index = current.indexOf(id)
       return index === -1 ? current : [...current.slice(0, index), ...current.slice(index + 1)]
     })
-    if (isDiscard) setDiscardsBySeat((current) => [[...current[0], id], ...current.slice(1)])
+    if (isDiscard) {
+      setDiscardsBySeat((current) => [[...current[0], id], ...current.slice(1)])
+      setDiscardCountBySeat((current) => current.map((count, seat) => seat === 0 ? count + 1 : count))
+    }
   }
 
   const removeDiscard = (id: string, seat: number) => {
     saveHistory()
+    if (discardsBySeat[seat]?.includes(id)) setDiscardCountBySeat((current) => current.map((count, rowIndex) => rowIndex === seat ? Math.max(0, count - 1) : count))
     setDiscardsBySeat((current) => current.map((row, rowIndex) => {
       if (rowIndex !== seat) return row
       const index = row.indexOf(id)
@@ -104,14 +118,20 @@ function App() {
     setHistory((current) => current.slice(0, -1))
     setHand(previous.hand)
     setDiscardsBySeat(previous.discardsBySeat)
+    setDiscardCountBySeat(previous.discardCountBySeat)
     setMeldsBySeat(previous.meldsBySeat)
+    setRiichiBySeat(previous.riichiBySeat)
+    setPostRiichiSafeBySeat(previous.postRiichiSafeBySeat)
     setOwnSeat(previous.ownSeat)
   }
 
   const reset = () => {
     setHand([])
     setDiscardsBySeat([[], [], [], []])
+    setDiscardCountBySeat([0, 0, 0, 0])
     setMeldsBySeat([[], [], [], []])
+    setRiichiBySeat([false, false, false, false])
+    setPostRiichiSafeBySeat([[], [], [], []])
     setOwnSeat(null)
     setHistory([])
   }
@@ -119,8 +139,8 @@ function App() {
   return <main className={`app-shell ${browserStatus === 'connected' ? 'connection-ready' : 'connection-unavailable'}`}>
     <div className="browser-connection"><div><strong>ブラウザ接続</strong><small>{browserStatus === 'connected' ? '雀魂のWebSocketを監視中' : browserStatus === 'connecting' ? '接続しています…' : browserError || 'Chromeを9222番ポートで起動してください'}</small></div><button className="connect-button" onClick={() => void connectBrowser()} disabled={browserStatus === 'connecting'}>{browserStatus === 'connected' ? '接続済み' : '接続する'}</button></div>
     <div className="workspace">
-      <HandEditor hand={hand} discardsBySeat={discardsBySeat} meldsBySeat={meldsBySeat} analysisHandLength={analysisHandLength} shanten={shanten} waits={waits} historyLength={history.length} onRemove={removeTile} onRemoveDiscard={removeDiscard} onRemoveMeldTile={removeMeldTile} onUndo={undo} onReset={reset} />
-      <aside className="right-column"><AnalysisResults handLength={hand.length} expectedHandLength={analysisHandLength} analysis={analysis} /></aside>
+      <HandEditor hand={hand} discardsBySeat={discardsBySeat} meldsBySeat={meldsBySeat} riichiBySeat={riichiBySeat} analysisHandLength={analysisHandLength} shanten={shanten} waits={waits} historyLength={history.length} onRemove={removeTile} onRemoveDiscard={removeDiscard} onRemoveMeldTile={removeMeldTile} onUndo={undo} onReset={reset} />
+      <aside className="right-column"><DangerResults assessments={dangerAssessments} /><AnalysisResults handLength={hand.length} expectedHandLength={analysisHandLength} analysis={analysis} /></aside>
     </div>
     <footer><span>捨て牌と鳴きで公開された牌を見えている牌として考慮</span></footer>
   </main>

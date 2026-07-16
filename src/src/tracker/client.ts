@@ -7,7 +7,10 @@ const ENTER_GAME = '.lq.FastTest.enterGame'
 export type TrackerSnapshot = {
   hand: string[] | null
   discards: string[][]
+  discardCountBySeat: number[]
   melds: string[][][]
+  riichiBySeat: boolean[]
+  postRiichiSafeBySeat: string[][]
   ownSeat: number | null
   lastEvent: { action: string; seat: number | null; tile: string | null } | null
   timestamp: number
@@ -38,6 +41,11 @@ function numberFields(data: ReturnType<typeof fields>, number: number): number[]
     if (field.wireType === 2 && typeof field.value !== 'number') return packedVarints(field.value)
     return []
   })
+}
+
+function boolField(data: ReturnType<typeof fields>, number: number): boolean {
+  const value = data.find((field) => field.number === number && field.wireType === 0)?.value
+  return typeof value === 'number' && value !== 0
 }
 
 function packedVarints(bytes: Uint8Array): number[] {
@@ -93,7 +101,10 @@ export class MahjongSoulTracker {
   private hand: string[] | null = null
   private ownSeat: number | null = null
   private discards = [[], [], [], []] as string[][]
+  private discardCountBySeat = [0, 0, 0, 0]
   private melds = [[], [], [], []] as string[][][]
+  private riichiBySeat = [false, false, false, false]
+  private postRiichiSafeBySeat = [[], [], [], []] as string[][]
   private lastEvent: TrackerSnapshot['lastEvent'] = null
   private listener: TrackerListener | null = null
 
@@ -140,11 +151,31 @@ export class MahjongSoulTracker {
     return {
       hand: this.hand ? [...this.hand] : null,
       discards: this.discards.map((row) => [...row]),
+      discardCountBySeat: [...this.discardCountBySeat],
       melds: this.melds.map((row) => row.map((meld) => [...meld])),
+      riichiBySeat: [...this.riichiBySeat],
+      postRiichiSafeBySeat: this.postRiichiSafeBySeat.map((row) => [...row]),
       ownSeat: this.ownSeat,
       lastEvent: this.lastEvent,
       timestamp: Date.now(),
     }
+  }
+
+  async restoreSnapshot(): Promise<void> {
+    const response = await fetch('/tracker/snapshot')
+    if (!response.ok) return
+    const snapshot = await response.json() as Partial<TrackerSnapshot>
+    if (!Array.isArray(snapshot.discards) || !Array.isArray(snapshot.melds)) return
+
+    this.hand = Array.isArray(snapshot.hand) ? [...snapshot.hand] : null
+    this.discards = Array.from({ length: 4 }, (_, seat) => Array.isArray(snapshot.discards?.[seat]) ? [...snapshot.discards[seat]] : [])
+    this.discardCountBySeat = Array.from({ length: 4 }, (_, seat) => typeof snapshot.discardCountBySeat?.[seat] === 'number' ? snapshot.discardCountBySeat[seat] : this.discards[seat].length)
+    this.melds = Array.from({ length: 4 }, (_, seat) => Array.isArray(snapshot.melds?.[seat]) ? snapshot.melds[seat].map((meld) => Array.isArray(meld) ? [...meld] : []) : [])
+    this.riichiBySeat = Array.from({ length: 4 }, (_, seat) => snapshot.riichiBySeat?.[seat] === true)
+    this.postRiichiSafeBySeat = Array.from({ length: 4 }, (_, seat) => Array.isArray(snapshot.postRiichiSafeBySeat?.[seat]) ? [...snapshot.postRiichiSafeBySeat[seat]] : [])
+    this.ownSeat = typeof snapshot.ownSeat === 'number' ? snapshot.ownSeat : null
+    this.lastEvent = snapshot.lastEvent ?? null
+    this.listener?.(this.snapshot())
   }
 
   async persistSnapshot(): Promise<void> {
@@ -248,13 +279,24 @@ export class MahjongSoulTracker {
       const initial = stringFields(action, 4).map(appTile).filter((value): value is string => value !== null)
       this.hand = initial.sort((left, right) => SORT_ORDER.indexOf(left) - SORT_ORDER.indexOf(right))
       this.discards = [[], [], [], []]
+      this.discardCountBySeat = [0, 0, 0, 0]
       this.melds = [[], [], [], []]
+      this.riichiBySeat = [false, false, false, false]
+      this.postRiichiSafeBySeat = [[], [], [], []]
       const dealer = action.find((field) => field.number === 2)?.value
       if (this.ownSeat === null && initial.length === 14 && typeof dealer === 'number' && dealer < this.discards.length) this.ownSeat = dealer
     } else if (name === 'ActionDealTile' && tile && seat !== null) {
       if (this.ownSeat === null) this.ownSeat = seat
       if (seat === this.ownSeat) this.hand = [...(this.hand ?? []), tile].sort((left, right) => SORT_ORDER.indexOf(left) - SORT_ORDER.indexOf(right))
     } else if (name === 'ActionDiscardTile' && tile && seat !== null && seat < this.discards.length) {
+      const isRiichi = boolField(action, 3) || boolField(action, 9)
+      this.riichiBySeat.forEach((riichi, targetSeat) => {
+        if ((riichi || (isRiichi && targetSeat === seat)) && !this.postRiichiSafeBySeat[targetSeat].includes(tile)) {
+          this.postRiichiSafeBySeat[targetSeat] = [...this.postRiichiSafeBySeat[targetSeat], tile]
+        }
+      })
+      if (isRiichi) this.riichiBySeat[seat] = true
+      this.discardCountBySeat[seat] += 1
       this.discards[seat] = [...this.discards[seat], tile]
       if (seat === this.ownSeat && this.hand) {
         const index = this.hand.indexOf(tile)

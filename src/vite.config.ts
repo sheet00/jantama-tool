@@ -8,6 +8,19 @@ function trackerPersistence() {
     name: 'tracker-persistence',
     configureServer(server: { middlewares: { use: (path: string, handler: (request: import('node:http').IncomingMessage, response: import('node:http').ServerResponse, next: () => void) => void) => void } }) {
       server.middlewares.use('/tracker/snapshot', async (request, response, next) => {
+        const output = path.resolve(process.cwd(), 'src/tracker/game.json')
+        if (request.method === 'GET') {
+          try {
+            const snapshot = await fs.readFile(output, 'utf8')
+            response.statusCode = 200
+            response.setHeader('Content-Type', 'application/json')
+            response.end(snapshot)
+          } catch {
+            response.statusCode = 404
+            response.end()
+          }
+          return
+        }
         if (request.method !== 'POST') {
           next()
           return
@@ -16,7 +29,6 @@ function trackerPersistence() {
         for await (const chunk of request) chunks.push(Buffer.from(chunk))
         const payload = Buffer.concat(chunks).toString('utf8')
         const snapshot = JSON.parse(payload) as unknown
-        const output = path.resolve(process.cwd(), 'src/tracker/game.json')
         const temporary = `${output}.tmp`
         await fs.mkdir(path.dirname(output), { recursive: true })
         await fs.writeFile(temporary, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8')
