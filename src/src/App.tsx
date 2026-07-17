@@ -35,7 +35,6 @@ function App() {
   const [ownSeat, setOwnSeat] = useState<number | null>(null)
   const [history, setHistory] = useState<Snapshot[]>([])
   const [browserStatus, setBrowserStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
-  const [browserError, setBrowserError] = useState('')
   const [sampleMode, setSampleMode] = useState(false)
   const connectionAttempt = useRef(0)
   const sampleModeRef = useRef(false)
@@ -65,7 +64,6 @@ function App() {
     sampleModeRef.current = false
     setSampleMode(false)
     setBrowserStatus('connecting')
-    setBrowserError('')
     try {
       tracker.onUpdate((snapshot) => {
         if (sampleModeRef.current) return
@@ -81,10 +79,9 @@ function App() {
       await tracker.connect()
       if (attempt !== connectionAttempt.current || sampleModeRef.current) return
       setBrowserStatus('connected')
-    } catch (error) {
+    } catch {
       if (attempt !== connectionAttempt.current || sampleModeRef.current) return
       setBrowserStatus('error')
-      setBrowserError(error instanceof Error ? error.message : 'ブラウザに接続できません')
     }
   }, [tracker])
 
@@ -121,7 +118,6 @@ function App() {
     tracker.disconnect()
     setSampleMode(true)
     setBrowserStatus('disconnected')
-    setBrowserError('')
     setHand([...SAMPLE_DATA.hand])
     setDiscardsBySeat(SAMPLE_DATA.discardsBySeat.map((row) => [...row]))
     setDiscardCountBySeat([...SAMPLE_DATA.discardCountBySeat])
@@ -205,10 +201,9 @@ function App() {
     setHistory([])
   }
 
-  return <main className={`app-shell ${sampleMode ? 'sample-mode' : browserStatus === 'connected' ? 'connection-ready' : 'connection-unavailable'}`}>
-    <div className="browser-connection"><div><strong>{sampleMode ? 'サンプル表示' : 'ブラウザ接続'}</strong><small>{sampleMode ? 'UI確認用のサンプルデータを表示中' : browserStatus === 'connected' ? '雀魂のWebSocketを監視中' : browserStatus === 'connecting' ? '接続しています…' : browserError || 'Chromeを9222番ポートで起動してください'}</small></div><div className="browser-actions"><button className={`sample-button ${sampleMode ? 'active' : ''}`} onClick={toggleSample}>{sampleMode ? 'サンプルを閉じる' : 'サンプル'}</button><button className="connect-button" onClick={() => void connectBrowser()} disabled={browserStatus === 'connecting'}>{browserStatus === 'connected' && !sampleMode ? '接続済み' : '接続する'}</button></div></div>
+  return <main className="app-shell">
     <div className="workspace">
-      <HandEditor hand={hand} discardsBySeat={discardsBySeat} meldsBySeat={meldsBySeat} riichiBySeat={riichiBySeat} analysisHandLength={analysisHandLength} shanten={shanten} waits={waits} historyLength={history.length} onRemove={removeTile} onRemoveDiscard={removeDiscard} onRemoveMeldTile={removeMeldTile} onUndo={undo} onReset={reset} />
+      <HandEditor hand={hand} discardsBySeat={discardsBySeat} meldsBySeat={meldsBySeat} riichiBySeat={riichiBySeat} analysisHandLength={analysisHandLength} shanten={shanten} waits={waits} historyLength={history.length} sampleMode={sampleMode} browserStatus={browserStatus} onRemove={removeTile} onRemoveDiscard={removeDiscard} onRemoveMeldTile={removeMeldTile} onUndo={undo} onReset={reset} onToggleSample={toggleSample} onConnect={connectBrowser} />
       <aside className="right-column"><DangerResults assessments={dangerAssessments} /><AnalysisResults handLength={hand.length} expectedHandLength={analysisHandLength} analysis={analysis} /></aside>
     </div>
     <footer><span>捨て牌と鳴きで公開された牌を見えている牌として考慮</span></footer>
