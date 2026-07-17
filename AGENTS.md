@@ -38,6 +38,12 @@ npm run preview
 
 作業ディレクトリは `src/` とする。
 
+## 検証方針
+
+- 明示的に依頼された場合を除き、`npm run build` の実行は禁止する。
+- 通常のUI確認は Vite 開発サーバーのホットリロードで行う。
+- 必要に応じて `npm run lint` は実行してよい。
+
 ## 画面の現在の動作
 
 - 起動時は `INITIAL_HAND` の13枚を表示する。
@@ -152,5 +158,5 @@ npm run preview
 - `Counts` の牌番号順と34種類の対応を変更しない。変更する場合は `TILES`、トラッカーの牌変換、エンジンを同時に確認する。
 - 捨て牌のランキング基準を変更する場合は、`analyzeDiscards` の `sort` と `AnalysisResults` の表示説明を同時に確認する。
 - 鳴き面子数を変更する場合は、`App.tsx` の `fixedMelds`、解析対象の手牌枚数、トラッカーの `melds` 更新を同時に確認する。
-- UIを変更した場合は `npm run lint` と `npm run build` を実行する。
-- エンジンを変更した場合も、最低限 `npm run lint` と `npm run build` を実行する。現在、package.json に自動テスト用の script はない。
+- UIを変更した場合は、Viteのホットリロードで動作を確認し、必要に応じて `npm run lint` を実行する。
+- エンジンを変更した場合も、必要に応じて `npm run lint` を実行する。現在、package.json に自動テスト用の script はない。
