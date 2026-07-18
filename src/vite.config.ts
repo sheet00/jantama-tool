@@ -21,6 +21,16 @@ function trackerPersistence() {
           }
           return
         }
+        if (request.method === 'DELETE') {
+          try {
+            await fs.unlink(output)
+          } catch (error: unknown) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+          }
+          response.statusCode = 204
+          response.end()
+          return
+        }
         if (request.method !== 'POST') {
           next()
           return

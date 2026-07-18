@@ -75,6 +75,17 @@ function App() {
         setPostRiichiSafeBySeat(snapshot.postRiichiSafeBySeat)
         setOwnSeat(snapshot.ownSeat)
       })
+      tracker.onGameEnd(() => {
+        setHand([])
+        setDiscardsBySeat([[], [], [], []])
+        setDiscardCountBySeat([0, 0, 0, 0])
+        setMeldsBySeat([[], [], [], []])
+        setRiichiBySeat([false, false, false, false])
+        setPostRiichiSafeBySeat([[], [], [], []])
+        setOwnSeat(null)
+        setHistory([])
+        void tracker.deleteSnapshot()
+      })
       await tracker.restoreSnapshot()
       await tracker.connect()
       if (attempt !== connectionAttempt.current || sampleModeRef.current) return
@@ -191,7 +202,14 @@ function App() {
   }
 
   const reset = () => {
-    setHand([])
+    connectionAttempt.current += 1
+    sampleModeRef.current = false
+    sampleReturnSnapshot.current = null
+    tracker.reset()
+    void tracker.deleteSnapshot()
+    setSampleMode(false)
+    setBrowserStatus('disconnected')
+    setHand([...INITIAL_HAND])
     setDiscardsBySeat([[], [], [], []])
     setDiscardCountBySeat([0, 0, 0, 0])
     setMeldsBySeat([[], [], [], []])

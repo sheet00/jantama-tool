@@ -17,6 +17,7 @@ export type TrackerSnapshot = {
 }
 
 export type TrackerListener = (snapshot: TrackerSnapshot) => void
+export type GameEndListener = () => void
 
 const TILE_MAP: Record<string, string> = {
   '0m': '5m', '1m': '1m', '2m': '2m', '3m': '3m', '4m': '4m', '5m': '5m', '6m': '6m', '7m': '7m', '8m': '8m', '9m': '9m',
@@ -107,9 +108,16 @@ export class MahjongSoulTracker {
   private postRiichiSafeBySeat = [[], [], [], []] as string[][]
   private lastEvent: TrackerSnapshot['lastEvent'] = null
   private listener: TrackerListener | null = null
+  private gameEndListener: GameEndListener | null = null
+  private snapshotMutation: Promise<void> = Promise.resolve()
+  private gameEnded = false
 
   onUpdate(listener: TrackerListener): void {
     this.listener = listener
+  }
+
+  onGameEnd(listener: GameEndListener): void {
+    this.gameEndListener = listener
   }
 
   async connect(): Promise<void> {
@@ -141,6 +149,19 @@ export class MahjongSoulTracker {
     this.socket = null
     this.pendingRequests.clear()
     this.pendingAuthAccounts.clear()
+  }
+
+  reset(): void {
+    this.disconnect()
+    this.hand = null
+    this.ownSeat = null
+    this.discards = [[], [], [], []]
+    this.discardCountBySeat = [0, 0, 0, 0]
+    this.melds = [[], [], [], []]
+    this.riichiBySeat = [false, false, false, false]
+    this.postRiichiSafeBySeat = [[], [], [], []]
+    this.lastEvent = null
+    this.gameEnded = false
   }
 
   isConnected(): boolean {
@@ -175,16 +196,32 @@ export class MahjongSoulTracker {
     this.postRiichiSafeBySeat = Array.from({ length: 4 }, (_, seat) => Array.isArray(snapshot.postRiichiSafeBySeat?.[seat]) ? [...snapshot.postRiichiSafeBySeat[seat]] : [])
     this.ownSeat = typeof snapshot.ownSeat === 'number' ? snapshot.ownSeat : null
     this.lastEvent = snapshot.lastEvent ?? null
+    this.gameEnded = false
     this.listener?.(this.snapshot())
   }
 
   async persistSnapshot(): Promise<void> {
-    if (!this.isConnected()) return
-    await fetch('/tracker/snapshot', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(this.snapshot()),
+    if (!this.isConnected() || this.gameEnded) return
+    const snapshot = this.snapshot()
+    await this.queueSnapshotMutation(async () => {
+      await fetch('/tracker/snapshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(snapshot),
+      })
     })
+  }
+
+  async deleteSnapshot(): Promise<void> {
+    await this.queueSnapshotMutation(async () => {
+      await fetch('/tracker/snapshot', { method: 'DELETE' })
+    })
+  }
+
+  private queueSnapshotMutation(mutation: () => Promise<void>): Promise<void> {
+    const queued = this.snapshotMutation.then(mutation, mutation)
+    this.snapshotMutation = queued.catch(() => undefined)
+    return queued
   }
 
   private send(method: string, params: unknown): void {
@@ -275,7 +312,14 @@ export class MahjongSoulTracker {
     const seatValue = action.find((field) => field.number === 1)?.value
     const seat = typeof seatValue === 'number' ? seatValue : 0
     const tile = appTile(text(action.find((field) => field.number === 2)?.value ?? 0))
+    if (isGameEndAction(name, action)) {
+      this.gameEnded = true
+      this.lastEvent = { action: name, seat, tile }
+      this.gameEndListener?.()
+      return
+    }
     if (name === 'ActionNewRound') {
+      this.gameEnded = false
       const initial = stringFields(action, 4).map(appTile).filter((value): value is string => value !== null)
       this.hand = initial.sort((left, right) => SORT_ORDER.indexOf(left) - SORT_ORDER.indexOf(right))
       this.discards = [[], [], [], []]
@@ -354,4 +398,11 @@ export class MahjongSoulTracker {
 function removeOne(tiles: string[], target: string): string[] {
   const index = tiles.indexOf(target)
   return index < 0 ? tiles : [...tiles.slice(0, index), ...tiles.slice(index + 1)]
+}
+
+function isGameEndAction(name: string, action: ReturnType<typeof fields>): boolean {
+  if (name === 'ActionNoTile') return boolField(action, 4)
+  if (name === 'ActionHule') return action.some((field) => field.number === 6 && field.wireType === 2)
+  if (name === 'ActionLiuJu') return action.some((field) => field.number === 2 && field.wireType === 2)
+  return false
 }
