@@ -8,6 +8,7 @@ export type TrackerSnapshot = {
   hand: string[] | null
   discards: string[][]
   discardCountBySeat: number[]
+  remainingWallTiles: number
   melds: string[][][]
   riichiBySeat: boolean[]
   postRiichiSafeBySeat: string[][]
@@ -103,6 +104,7 @@ export class MahjongSoulTracker {
   private ownSeat: number | null = null
   private discards = [[], [], [], []] as string[][]
   private discardCountBySeat = [0, 0, 0, 0]
+  private remainingWallTiles = 70
   private melds = [[], [], [], []] as string[][][]
   private riichiBySeat = [false, false, false, false]
   private postRiichiSafeBySeat = [[], [], [], []] as string[][]
@@ -157,6 +159,7 @@ export class MahjongSoulTracker {
     this.ownSeat = null
     this.discards = [[], [], [], []]
     this.discardCountBySeat = [0, 0, 0, 0]
+    this.remainingWallTiles = 70
     this.melds = [[], [], [], []]
     this.riichiBySeat = [false, false, false, false]
     this.postRiichiSafeBySeat = [[], [], [], []]
@@ -173,6 +176,7 @@ export class MahjongSoulTracker {
       hand: this.hand ? [...this.hand] : null,
       discards: this.discards.map((row) => [...row]),
       discardCountBySeat: [...this.discardCountBySeat],
+      remainingWallTiles: this.remainingWallTiles,
       melds: this.melds.map((row) => row.map((meld) => [...meld])),
       riichiBySeat: [...this.riichiBySeat],
       postRiichiSafeBySeat: this.postRiichiSafeBySeat.map((row) => [...row]),
@@ -191,6 +195,7 @@ export class MahjongSoulTracker {
     this.hand = Array.isArray(snapshot.hand) ? [...snapshot.hand] : null
     this.discards = Array.from({ length: 4 }, (_, seat) => Array.isArray(snapshot.discards?.[seat]) ? [...snapshot.discards[seat]] : [])
     this.discardCountBySeat = Array.from({ length: 4 }, (_, seat) => typeof snapshot.discardCountBySeat?.[seat] === 'number' ? snapshot.discardCountBySeat[seat] : this.discards[seat].length)
+    this.remainingWallTiles = typeof snapshot.remainingWallTiles === 'number' ? snapshot.remainingWallTiles : 70
     this.melds = Array.from({ length: 4 }, (_, seat) => Array.isArray(snapshot.melds?.[seat]) ? snapshot.melds[seat].map((meld) => Array.isArray(meld) ? [...meld] : []) : [])
     this.riichiBySeat = Array.from({ length: 4 }, (_, seat) => snapshot.riichiBySeat?.[seat] === true)
     this.postRiichiSafeBySeat = Array.from({ length: 4 }, (_, seat) => Array.isArray(snapshot.postRiichiSafeBySeat?.[seat]) ? [...snapshot.postRiichiSafeBySeat[seat]] : [])
@@ -324,14 +329,16 @@ export class MahjongSoulTracker {
       this.hand = initial.sort((left, right) => SORT_ORDER.indexOf(left) - SORT_ORDER.indexOf(right))
       this.discards = [[], [], [], []]
       this.discardCountBySeat = [0, 0, 0, 0]
+      this.remainingWallTiles = 70
       this.melds = [[], [], [], []]
       this.riichiBySeat = [false, false, false, false]
       this.postRiichiSafeBySeat = [[], [], [], []]
       const dealer = action.find((field) => field.number === 2)?.value
       if (this.ownSeat === null && initial.length === 14 && typeof dealer === 'number' && dealer < this.discards.length) this.ownSeat = dealer
-    } else if (name === 'ActionDealTile' && tile && seat !== null) {
+    } else if (name === 'ActionDealTile' && seat !== null) {
+      this.remainingWallTiles = Math.max(0, this.remainingWallTiles - 1)
       if (this.ownSeat === null) this.ownSeat = seat
-      if (seat === this.ownSeat) this.hand = [...(this.hand ?? []), tile].sort((left, right) => SORT_ORDER.indexOf(left) - SORT_ORDER.indexOf(right))
+      if (tile && seat === this.ownSeat) this.hand = [...(this.hand ?? []), tile].sort((left, right) => SORT_ORDER.indexOf(left) - SORT_ORDER.indexOf(right))
     } else if (name === 'ActionDiscardTile' && tile && seat !== null && seat < this.discards.length) {
       const isRiichi = boolField(action, 3) || boolField(action, 9)
       this.riichiBySeat.forEach((riichi, targetSeat) => {

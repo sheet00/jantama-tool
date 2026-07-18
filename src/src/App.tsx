@@ -8,7 +8,7 @@ import { analyzeDiscards, currentShanten, currentWaits } from './engine/mahjong'
 import { analyzeDanger } from './engine/danger'
 import { MahjongSoulTracker } from './tracker/client'
 
-type Snapshot = { hand: string[]; discardsBySeat: string[][]; discardCountBySeat: number[]; meldsBySeat: string[][][]; riichiBySeat: boolean[]; postRiichiSafeBySeat: string[][]; ownSeat: number | null }
+type Snapshot = { hand: string[]; discardsBySeat: string[][]; discardCountBySeat: number[]; remainingWallTiles: number; meldsBySeat: string[][][]; riichiBySeat: boolean[]; postRiichiSafeBySeat: string[][]; ownSeat: number | null }
 
 const SAMPLE_DATA: Snapshot = {
   hand: ['1m', '2m', '3m', '4m', '5m', '6m', '7m', '2p', '3p', '4p', '6s', '7s', '5z', '6z'],
@@ -19,6 +19,7 @@ const SAMPLE_DATA: Snapshot = {
     ['5m', '6m', '1m', '2p', '8p', '4s', '6z', '7z'],
   ],
   discardCountBySeat: [6, 9, 6, 8],
+  remainingWallTiles: 41,
   meldsBySeat: [[], [], [], []],
   riichiBySeat: [false, true, false, true],
   postRiichiSafeBySeat: [[], ['9s'], [], ['9s']],
@@ -29,6 +30,7 @@ function App() {
   const [hand, setHand] = useState(INITIAL_HAND)
   const [discardsBySeat, setDiscardsBySeat] = useState<string[][]>([[], [], [], []])
   const [discardCountBySeat, setDiscardCountBySeat] = useState<number[]>([0, 0, 0, 0])
+  const [remainingWallTiles, setRemainingWallTiles] = useState(70)
   const [meldsBySeat, setMeldsBySeat] = useState<string[][][]>([[], [], [], []])
   const [riichiBySeat, setRiichiBySeat] = useState<boolean[]>([false, false, false, false])
   const [postRiichiSafeBySeat, setPostRiichiSafeBySeat] = useState<string[][]>([[], [], [], []])
@@ -48,7 +50,7 @@ function App() {
   const analysis = useMemo(() => analyzeDiscards(toTileCounts(hand), toTileCounts(visible), fixedMelds), [hand, visible, fixedMelds])
   const shanten = useMemo(() => currentShanten(toTileCounts(hand), fixedMelds), [hand, fixedMelds])
   const waits = useMemo(() => currentWaits(toTileCounts(hand), toTileCounts(visible), fixedMelds), [hand, visible, fixedMelds])
-  const dangerAssessments = useMemo(() => analyzeDanger(hand, discardsBySeat, discardCountBySeat, meldsBySeat, riichiBySeat, postRiichiSafeBySeat, ownSeat), [hand, discardsBySeat, discardCountBySeat, meldsBySeat, riichiBySeat, postRiichiSafeBySeat, ownSeat])
+  const dangerAssessments = useMemo(() => analyzeDanger(hand, discardsBySeat, remainingWallTiles, meldsBySeat, riichiBySeat, postRiichiSafeBySeat, ownSeat), [hand, discardsBySeat, remainingWallTiles, meldsBySeat, riichiBySeat, postRiichiSafeBySeat, ownSeat])
 
   useEffect(() => () => tracker.disconnect(), [tracker])
 
@@ -70,6 +72,7 @@ function App() {
         if (snapshot.hand) setHand(snapshot.hand)
         setDiscardsBySeat(snapshot.discards)
         setDiscardCountBySeat(snapshot.discardCountBySeat)
+        setRemainingWallTiles(snapshot.remainingWallTiles)
         setMeldsBySeat(snapshot.melds)
         setRiichiBySeat(snapshot.riichiBySeat)
         setPostRiichiSafeBySeat(snapshot.postRiichiSafeBySeat)
@@ -79,6 +82,7 @@ function App() {
         setHand([])
         setDiscardsBySeat([[], [], [], []])
         setDiscardCountBySeat([0, 0, 0, 0])
+        setRemainingWallTiles(70)
         setMeldsBySeat([[], [], [], []])
         setRiichiBySeat([false, false, false, false])
         setPostRiichiSafeBySeat([[], [], [], []])
@@ -117,8 +121,9 @@ function App() {
 
     sampleReturnSnapshot.current = {
       hand: [...hand],
-      discardsBySeat: discardsBySeat.map((row) => [...row]),
-      discardCountBySeat: [...discardCountBySeat],
+        discardsBySeat: discardsBySeat.map((row) => [...row]),
+        discardCountBySeat: [...discardCountBySeat],
+        remainingWallTiles,
       meldsBySeat: meldsBySeat.map((row) => row.map((meld) => [...meld])),
       riichiBySeat: [...riichiBySeat],
       postRiichiSafeBySeat: postRiichiSafeBySeat.map((row) => [...row]),
@@ -132,12 +137,13 @@ function App() {
     setHand([...SAMPLE_DATA.hand])
     setDiscardsBySeat(SAMPLE_DATA.discardsBySeat.map((row) => [...row]))
     setDiscardCountBySeat([...SAMPLE_DATA.discardCountBySeat])
+    setRemainingWallTiles(SAMPLE_DATA.remainingWallTiles)
     setMeldsBySeat(SAMPLE_DATA.meldsBySeat.map((row) => row.map((meld) => [...meld])))
     setRiichiBySeat([...SAMPLE_DATA.riichiBySeat])
     setPostRiichiSafeBySeat(SAMPLE_DATA.postRiichiSafeBySeat.map((row) => [...row]))
     setOwnSeat(SAMPLE_DATA.ownSeat)
     setHistory([])
-  }, [discardCountBySeat, discardsBySeat, hand, meldsBySeat, ownSeat, postRiichiSafeBySeat, riichiBySeat, tracker])
+  }, [discardCountBySeat, discardsBySeat, hand, meldsBySeat, ownSeat, postRiichiSafeBySeat, remainingWallTiles, riichiBySeat, tracker])
 
   useEffect(() => {
     if (browserStatus === 'connected' || sampleMode) return undefined
@@ -151,7 +157,7 @@ function App() {
     }
   }, [browserStatus, connectBrowser, sampleMode])
 
-  const saveHistory = () => setHistory((current) => [...current.slice(-9), { hand: [...hand], discardsBySeat: discardsBySeat.map((row) => [...row]), discardCountBySeat: [...discardCountBySeat], meldsBySeat: meldsBySeat.map((row) => row.map((meld) => [...meld])), riichiBySeat: [...riichiBySeat], postRiichiSafeBySeat: postRiichiSafeBySeat.map((row) => [...row]), ownSeat }])
+  const saveHistory = () => setHistory((current) => [...current.slice(-9), { hand: [...hand], discardsBySeat: discardsBySeat.map((row) => [...row]), discardCountBySeat: [...discardCountBySeat], remainingWallTiles, meldsBySeat: meldsBySeat.map((row) => row.map((meld) => [...meld])), riichiBySeat: [...riichiBySeat], postRiichiSafeBySeat: postRiichiSafeBySeat.map((row) => [...row]), ownSeat }])
 
   const removeTile = (id: string) => {
     const isDiscard = hand.length === analysisHandLength
@@ -195,6 +201,7 @@ function App() {
     setHand(previous.hand)
     setDiscardsBySeat(previous.discardsBySeat)
     setDiscardCountBySeat(previous.discardCountBySeat)
+    setRemainingWallTiles(previous.remainingWallTiles)
     setMeldsBySeat(previous.meldsBySeat)
     setRiichiBySeat(previous.riichiBySeat)
     setPostRiichiSafeBySeat(previous.postRiichiSafeBySeat)
@@ -212,6 +219,7 @@ function App() {
     setHand([...INITIAL_HAND])
     setDiscardsBySeat([[], [], [], []])
     setDiscardCountBySeat([0, 0, 0, 0])
+    setRemainingWallTiles(70)
     setMeldsBySeat([[], [], [], []])
     setRiichiBySeat([false, false, false, false])
     setPostRiichiSafeBySeat([[], [], [], []])

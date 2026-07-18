@@ -4,7 +4,10 @@ import { TILES } from '../domain/tiles'
 type Props = { handLength: number; expectedHandLength: number; analysis: DiscardAnalysis[] }
 
 function sameRank(left: DiscardAnalysis, right: DiscardAnalysis): boolean {
-  return left.shanten === right.shanten && left.effectiveTileCount === right.effectiveTileCount
+  return left.shanten === right.shanten &&
+    left.effectiveTileCount === right.effectiveTileCount &&
+    left.discardRemainingCount === right.discardRemainingCount &&
+    left.discardConnectionCount === right.discardConnectionCount
 }
 
 function rankFor(analysis: DiscardAnalysis[], index: number): number {

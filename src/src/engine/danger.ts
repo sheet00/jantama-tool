@@ -81,7 +81,7 @@ function targetRisk(tile: string, targetDiscards: string[], postRiichiSafe: stri
 export function analyzeDanger(
   hand: string[],
   discardsBySeat: string[][],
-  discardCountBySeat: number[],
+  remainingWallTiles: number,
   meldsBySeat: string[][][],
   riichiBySeat: boolean[],
   postRiichiSafeBySeat: string[][],
@@ -89,7 +89,8 @@ export function analyzeDanger(
 ): DangerAssessment[] {
   const targets = riichiBySeat
     .map((riichi, seat) => {
-      const presumedTenpai = (meldsBySeat[seat]?.length ?? 0) >= 2 && (discardCountBySeat[seat] ?? discardsBySeat[seat]?.length ?? 0) >= 13
+      const presumedTenpai =
+        remainingWallTiles <= 40 && (meldsBySeat[seat]?.length ?? 0) >= 2
       return (riichi || presumedTenpai) && seat !== ownSeat ? seat : null
     })
     .filter((seat): seat is number => seat !== null)

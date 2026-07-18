@@ -5,9 +5,20 @@ export type DiscardAnalysis = {
   shanten: number;
   effectiveTiles: number[];
   effectiveTileCount: number;
+  discardRemainingCount: number;
+  discardConnectionCount: number;
 };
 
 const isSuit = (tile: number) => tile < 27;
+
+function adjacentTiles(tile: number): number[] {
+  if (!isSuit(tile)) return [];
+  const rank = tile % 9;
+  return [
+    ...(rank > 0 ? [tile - 1] : []),
+    ...(rank < 8 ? [tile + 1] : []),
+  ];
+}
 
 /** 通常手（4面子1雀頭）のシャンテン数を返す。鳴き面子は完成面子として扱う。 */
 export function standardShanten(input: Counts, fixedMelds = 0): number {
@@ -122,13 +133,29 @@ export function analyzeDiscards(
       (total, tile) => total + 4 - afterDiscard[tile] - visibleAfterDiscard[tile],
       0,
     );
-    results.push({ discard, shanten, effectiveTiles, effectiveTileCount });
+    const discardRemainingCount =
+      4 - afterDiscard[discard] - visibleAfterDiscard[discard];
+    const discardConnectionCount = adjacentTiles(discard).reduce(
+      (total, tile) =>
+        total + 4 - afterDiscard[tile] - visibleAfterDiscard[tile],
+      0,
+    );
+    results.push({
+      discard,
+      shanten,
+      effectiveTiles,
+      effectiveTileCount,
+      discardRemainingCount,
+      discardConnectionCount,
+    });
   }
 
   return results.sort(
     (a, b) =>
       a.shanten - b.shanten ||
       b.effectiveTileCount - a.effectiveTileCount ||
+      a.discardRemainingCount - b.discardRemainingCount ||
+      a.discardConnectionCount - b.discardConnectionCount ||
       b.effectiveTiles.length - a.effectiveTiles.length ||
       a.discard - b.discard,
   );
