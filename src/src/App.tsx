@@ -3,7 +3,7 @@ import './App.css'
 import { AnalysisResults } from './components/AnalysisResults'
 import { DangerResults } from './components/DangerResults'
 import { HandEditor } from './components/HandEditor'
-import { INITIAL_HAND, toTileCounts } from './domain/tiles'
+import { INITIAL_HAND, toTileCounts, TILES } from './domain/tiles'
 import { analyzeDiscards, currentShanten, currentWaits } from './engine/mahjong'
 import { analyzeDanger } from './engine/danger'
 import { MahjongSoulTracker } from './tracker/client'
@@ -51,6 +51,15 @@ function App() {
   const shanten = useMemo(() => currentShanten(toTileCounts(hand), fixedMelds), [hand, fixedMelds])
   const waits = useMemo(() => currentWaits(toTileCounts(hand), toTileCounts(visible), fixedMelds), [hand, visible, fixedMelds])
   const dangerAssessments = useMemo(() => analyzeDanger(hand, discardsBySeat, remainingWallTiles, meldsBySeat, riichiBySeat, postRiichiSafeBySeat, ownSeat), [hand, discardsBySeat, remainingWallTiles, meldsBySeat, riichiBySeat, postRiichiSafeBySeat, ownSeat])
+  const recommendedDiscards = useMemo(() => {
+    if (!analysis.length) return []
+    const first = analysis[0]
+    const bestDiscards = analysis.filter((item) => 
+      item.shanten === first.shanten &&
+      item.effectiveTileCount === first.effectiveTileCount
+    )
+    return bestDiscards.map((item) => TILES[item.discard].id)
+  }, [analysis])
 
   useEffect(() => () => tracker.disconnect(), [tracker])
 
@@ -216,7 +225,7 @@ function App() {
     void tracker.deleteSnapshot()
     setSampleMode(false)
     setBrowserStatus('disconnected')
-    setHand([...INITIAL_HAND])
+    setHand([])
     setDiscardsBySeat([[], [], [], []])
     setDiscardCountBySeat([0, 0, 0, 0])
     setRemainingWallTiles(70)
@@ -227,9 +236,9 @@ function App() {
     setHistory([])
   }
 
-  return <main className="app-shell">
+  return <main className={`app-shell connection-${browserStatus}`}>
     <div className="workspace">
-      <HandEditor hand={hand} discardsBySeat={discardsBySeat} meldsBySeat={meldsBySeat} riichiBySeat={riichiBySeat} analysisHandLength={analysisHandLength} shanten={shanten} waits={waits} historyLength={history.length} sampleMode={sampleMode} browserStatus={browserStatus} onRemove={removeTile} onRemoveDiscard={removeDiscard} onRemoveMeldTile={removeMeldTile} onUndo={undo} onReset={reset} onToggleSample={toggleSample} onConnect={connectBrowser} />
+      <HandEditor hand={hand} recommendedDiscards={recommendedDiscards} discardsBySeat={discardsBySeat} meldsBySeat={meldsBySeat} riichiBySeat={riichiBySeat} analysisHandLength={analysisHandLength} shanten={shanten} waits={waits} historyLength={history.length} sampleMode={sampleMode} browserStatus={browserStatus} onRemove={removeTile} onRemoveDiscard={removeDiscard} onRemoveMeldTile={removeMeldTile} onUndo={undo} onReset={reset} onToggleSample={toggleSample} onConnect={connectBrowser} />
       <aside className="right-column"><DangerResults assessments={dangerAssessments} /><AnalysisResults handLength={hand.length} expectedHandLength={analysisHandLength} analysis={analysis} /></aside>
     </div>
     <footer><span>捨て牌と鳴きで公開された牌を見えている牌として考慮</span></footer>

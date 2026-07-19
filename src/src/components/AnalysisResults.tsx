@@ -5,9 +5,7 @@ type Props = { handLength: number; expectedHandLength: number; analysis: Discard
 
 function sameRank(left: DiscardAnalysis, right: DiscardAnalysis): boolean {
   return left.shanten === right.shanten &&
-    left.effectiveTileCount === right.effectiveTileCount &&
-    left.discardRemainingCount === right.discardRemainingCount &&
-    left.discardConnectionCount === right.discardConnectionCount
+    left.effectiveTileCount === right.effectiveTileCount
 }
 
 function rankFor(analysis: DiscardAnalysis[], index: number): number {
