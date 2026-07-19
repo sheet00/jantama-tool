@@ -338,7 +338,7 @@ export class MahjongSoulTracker {
     } else if (name === 'ActionDealTile' && seat !== null) {
       this.remainingWallTiles = Math.max(0, this.remainingWallTiles - 1)
       if (this.ownSeat === null && tile) this.ownSeat = seat
-      if (tile && seat === this.ownSeat) this.hand = [...(this.hand ?? []), tile].sort((left, right) => SORT_ORDER.indexOf(left) - SORT_ORDER.indexOf(right))
+      if (tile && seat === this.ownSeat) this.hand = [...(this.hand ?? []), tile]
     } else if (name === 'ActionDiscardTile' && tile && seat !== null && seat < this.discards.length) {
       const isRiichi = boolField(action, 3) || boolField(action, 9)
       this.riichiBySeat.forEach((riichi, targetSeat) => {
@@ -351,7 +351,10 @@ export class MahjongSoulTracker {
       this.discards[seat] = [...this.discards[seat], tile]
       if (seat === this.ownSeat && this.hand) {
         const index = this.hand.indexOf(tile)
-        if (index >= 0) this.hand = [...this.hand.slice(0, index), ...this.hand.slice(index + 1)]
+        if (index >= 0) {
+          const nextHand = [...this.hand.slice(0, index), ...this.hand.slice(index + 1)]
+          this.hand = nextHand.sort((left, right) => SORT_ORDER.indexOf(left) - SORT_ORDER.indexOf(right))
+        }
       }
     } else if (name === 'ActionChiPengGang' && seat !== null) {
       const meldType = action.find((field) => field.number === 2)?.value
