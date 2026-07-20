@@ -19,6 +19,9 @@ Akagi/
 src/src/tracker/game.json
 src/src/tracker/game.json.tmp
 
+# Runtime event logs
+src/tracker/logs/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

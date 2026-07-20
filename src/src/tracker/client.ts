@@ -109,6 +109,7 @@ export class MahjongSoulTracker {
   private riichiBySeat = [false, false, false, false]
   private postRiichiSafeBySeat = [[], [], [], []] as string[][]
   private lastEvent: TrackerSnapshot['lastEvent'] = null
+  private logFile: string | null = null
   private listener: TrackerListener | null = null
   private gameEndListener: GameEndListener | null = null
   private snapshotMutation: Promise<void> = Promise.resolve()
@@ -164,6 +165,7 @@ export class MahjongSoulTracker {
     this.riichiBySeat = [false, false, false, false]
     this.postRiichiSafeBySeat = [[], [], [], []]
     this.lastEvent = null
+    this.logFile = null
     this.gameEnded = false
   }
 
@@ -231,6 +233,21 @@ export class MahjongSoulTracker {
 
   private send(method: string, params: unknown): void {
     this.socket?.send(JSON.stringify({ id: ++this.requestId, method, params }))
+  }
+
+  private writeLog(line: string): void {
+    if (!this.logFile) return
+    const now = new Date()
+    const hh = String(now.getHours()).padStart(2, '0')
+    const mm = String(now.getMinutes()).padStart(2, '0')
+    const ss = String(now.getSeconds()).padStart(2, '0')
+    const ms = String(now.getMilliseconds()).padStart(3, '0')
+    const full = `[${hh}:${mm}:${ss}.${ms}] ${line}`
+    fetch('/tracker/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ logFile: this.logFile, line: full }),
+    }).catch(() => undefined)
   }
 
   private handleMessage(raw: unknown): void {
@@ -318,6 +335,7 @@ export class MahjongSoulTracker {
     const seat = typeof seatValue === 'number' ? seatValue : 0
     const tile = appTile(text(action.find((field) => field.number === 2)?.value ?? 0))
     if (isGameEndAction(name, action)) {
+      this.writeLog(`${name} seat=${seat} tile=${tile ?? '?'} [局終了]`)
       this.gameEnded = true
       this.lastEvent = { action: name, seat, tile }
       this.gameEndListener?.()
@@ -325,7 +343,8 @@ export class MahjongSoulTracker {
     }
     if (name === 'ActionNewRound') {
       this.gameEnded = false
-      const initial = stringFields(action, 4).map(appTile).filter((value): value is string => value !== null)
+      const rawTiles = stringFields(action, 4)
+      const initial = rawTiles.map(appTile).filter((value): value is string => value !== null)
       this.hand = initial.sort((left, right) => SORT_ORDER.indexOf(left) - SORT_ORDER.indexOf(right))
       this.discards = [[], [], [], []]
       this.discardCountBySeat = [0, 0, 0, 0]
@@ -335,10 +354,17 @@ export class MahjongSoulTracker {
       this.postRiichiSafeBySeat = [[], [], [], []]
       const dealer = action.find((field) => field.number === 2)?.value
       if (this.ownSeat === null && initial.length === 14 && typeof dealer === 'number' && dealer < this.discards.length) this.ownSeat = dealer
+      const now = new Date()
+      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+      this.logFile = `events_${dateStr}.log`
+      const dropped = rawTiles.filter((raw) => appTile(raw) === null)
+      const droppedNote = dropped.length > 0 ? ` WARN: dropped=[${dropped.join(' ')}]` : ''
+      this.writeLog(`ActionNewRound dealer=${typeof dealer === 'number' ? dealer : '?'} ownSeat=${this.ownSeat ?? '?'} raw=(${rawTiles.length}枚) hand=[${this.hand.join(' ')}] (${this.hand.length}枚)${droppedNote}`)
     } else if (name === 'ActionDealTile' && seat !== null) {
       this.remainingWallTiles = Math.max(0, this.remainingWallTiles - 1)
       if (this.ownSeat === null && tile) this.ownSeat = seat
       if (tile && seat === this.ownSeat) this.hand = [...(this.hand ?? []), tile]
+      this.writeLog(`ActionDealTile seat=${seat} tile=${tile ?? '?'} ownSeat=${this.ownSeat ?? '?'} hand=${this.hand?.length ?? '?'}`)
     } else if (name === 'ActionDiscardTile' && tile && seat !== null && seat < this.discards.length) {
       const isRiichi = boolField(action, 3) || boolField(action, 9)
       this.riichiBySeat.forEach((riichi, targetSeat) => {
@@ -356,6 +382,7 @@ export class MahjongSoulTracker {
           this.hand = nextHand.sort((left, right) => SORT_ORDER.indexOf(left) - SORT_ORDER.indexOf(right))
         }
       }
+      this.writeLog(`ActionDiscardTile seat=${seat} tile=${tile}${isRiichi ? ' RIICHI' : ''} hand=${this.hand?.length ?? '?'}`)
     } else if (name === 'ActionChiPengGang' && seat !== null) {
       const meldType = action.find((field) => field.number === 2)?.value
       const tiles = stringFields(action, 3).map(appTile).filter((value): value is string => value !== null)
@@ -373,6 +400,7 @@ export class MahjongSoulTracker {
       if (seat === this.ownSeat && this.hand) {
         this.hand = removeTiles(this.hand, tiles.filter((_, index) => froms[index] === seat))
       }
+      this.writeLog(`ActionChiPengGang seat=${seat} called=${calledTile} from=${sourceSeat} tiles=[${tiles.join(' ')}] hand=${this.hand?.length ?? '?'}`)
       this.lastEvent = { action: name, seat, tile: calledTile }
       this.listener?.(this.snapshot())
       return
@@ -394,6 +422,7 @@ export class MahjongSoulTracker {
         this.melds[seat] = [...this.melds[seat], meldTiles]
       }
       if (seat === this.ownSeat && this.hand) this.hand = removeTiles(this.hand, meldTiles)
+      this.writeLog(`ActionAnGangAddGang seat=${seat} type=${meldType} tile=${meldTile} hand=${this.hand?.length ?? '?'}`)
       this.lastEvent = { action: name, seat, tile: meldTile }
       this.listener?.(this.snapshot())
       return
@@ -401,6 +430,13 @@ export class MahjongSoulTracker {
       return
     }
     this.lastEvent = { action: name, seat, tile }
+    if (isGameEndAction(name, action)) {
+      // already handled above, this won't be reached
+    } else if (name === 'ActionNewRound' || name === 'ActionDealTile' || name === 'ActionDiscardTile') {
+      // log already written in each branch
+    } else {
+      this.writeLog(`${name} seat=${seat} tile=${tile ?? '?'}`)
+    }
     this.listener?.(this.snapshot())
   }
 }
