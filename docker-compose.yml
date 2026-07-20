@@ -1,6 +1,7 @@
 services:
   app:
     image: node:latest
+    user: "${UID}:${GID}"
     working_dir: /app
     network_mode: host
     volumes:
