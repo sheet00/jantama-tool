@@ -19,7 +19,7 @@ docker compose up -d
 - アプリ内の「ブラウザ接続」ボタンから雀魂のタブへ接続
 - Viteの `/cdp` プロキシ経由でCDPのCORS制約を回避
 - `Network.webSocketFrameReceived` で雀魂のWebSocketを監視
-- Akagiを参考にMajsoulの `ActionPrototype` とXOR暗号化データを復号
+- MajsoulのWebSocketプロトコルのXOR暗号化・`ActionPrototype` 構造を復号
 - `ActionNewRound` から初期手牌を取得
 - `ActionDealTile` から自分のツモを取得
 - `ActionDiscardTile` から全4座席の捨て牌を取得
@@ -79,6 +79,84 @@ docker-compose.yml
 scripts/start.py      # Windows向けChrome起動
 ```
 
+## シーケンス図
+
+### ブラウザ接続フロー
+
+```mermaid
+sequenceDiagram
+    actor User as ユーザー
+    participant App as App.tsx
+    participant Tracker as MahjongSoulTracker
+    participant Vite as Vite Dev Server<br/>(プロキシ)
+    participant Chrome as Chrome CDP<br/>(:9222)
+
+    User->>App: 「ブラウザ接続」ボタン押下
+    App->>Tracker: connect()
+    Tracker->>Vite: GET /cdp/json/list
+    Vite->>Chrome: GET /json/list
+    Chrome-->>Vite: ページ一覧 (JSON)
+    Vite-->>Tracker: ページ一覧 (JSON)
+    Tracker->>Tracker: mahjongsoul.com のタブを検索
+    Tracker->>Vite: WebSocket /cdp/<debuggerPath>
+    Vite->>Chrome: WebSocket 接続
+    Chrome-->>Tracker: 接続確立
+    Tracker->>Chrome: Network.enable
+    App->>Tracker: restoreSnapshot()
+    Tracker->>Vite: GET /tracker/snapshot
+    Vite-->>Tracker: 保存済みスナップショット (JSON)
+    Tracker-->>App: onUpdate コールバック
+    App-->>User: 手牌・捨て牌を復元表示
+```
+
+### ゲームイベント処理フロー
+
+```mermaid
+sequenceDiagram
+    participant MajSoul as 雀魂サーバー
+    participant Chrome as Chrome
+    participant Tracker as MahjongSoulTracker<br/>(client.ts)
+    participant Proto as protocol.ts<br/>(Base64/XOR/protobuf)
+    participant App as App.tsx<br/>(React State)
+    participant Engine as mahjong.ts<br/>(解析エンジン)
+    participant UI as AnalysisResults<br/>/ HandEditor
+
+    MajSoul->>Chrome: WebSocket フレーム (暗号化)
+    Chrome->>Tracker: Network.webSocketFrameReceived
+    Tracker->>Proto: decodeBase64(payload)
+    Proto-->>Tracker: Uint8Array
+    Tracker->>Proto: fields() → xorAction()
+    Proto-->>Tracker: ActionPrototype { name, data }
+
+    alt ActionNewRound
+        Tracker->>Tracker: hand を初期手牌で初期化<br/>discards / melds をリセット
+    else ActionDealTile (自席)
+        Tracker->>Tracker: hand に自摸牌を追加
+    else ActionDiscardTile
+        Tracker->>Tracker: discards[seat] に追加<br/>自席なら hand から削除<br/>リーチ情報を更新
+    else ActionChiPengGang
+        Tracker->>Tracker: 元の河から鳴かれた牌を削除<br/>melds[seat] に追加<br/>自席なら hand から手牌を削除
+    else ActionAnGangAddGang
+        Tracker->>Tracker: melds[seat] に槓牌を追加
+    end
+
+    Tracker->>App: onUpdate(snapshot)
+    App->>App: setHand / setDiscardsBySeat<br/>setMeldsBySeat など state 更新
+
+    App->>Engine: analyzeDiscards(hand, visible, fixedMelds)
+    Engine->>Engine: 各捨て牌候補のシャンテン数を計算<br/>有効牌と残り枚数を集計
+    Engine-->>App: DiscardCandidate[]
+
+    App->>Engine: currentShanten / currentWaits
+    Engine-->>App: shanten / waits
+
+    App->>UI: props として渡す
+    UI-->>UI: 捨て牌ランキング・シャンテン数を描画
+
+    App->>Tracker: persistSnapshot() (1秒ごと)
+    Tracker->>App: POST /tracker/snapshot (JSON保存)
+```
+
 ## 検証
 
 ```bash
@@ -88,3 +166,7 @@ npm run build
 ```
 
 Docker環境では、アプリコンテナをホストネットワークで起動し、ホストの `127.0.0.1:9222` に接続します。
+
+## 参考
+
+- [Akagi](https://github.com/shinkuan/Akagi) — 雀魂・天鳳向けのリアルタイム麻雀AIアシスタント。MajsoulのWebSocketプロトコル（`ActionPrototype` 構造・XOR暗号化）の解読に使用した。
