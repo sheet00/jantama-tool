@@ -115,6 +115,11 @@ function App() {
     try {
       tracker.onUpdate((snapshot) => {
         if (sampleModeRef.current) return
+        if (snapshot.lastEvent?.action === 'ActionNewRound') {
+          setAdvice(null)
+          setAdviceError(null)
+          setAdviceTimestamp(null)
+        }
         if (snapshot.hand) setHand(snapshot.hand)
         setDiscardsBySeat(snapshot.discards)
         setDiscardCountBySeat(snapshot.discardCountBySeat)
@@ -123,6 +128,11 @@ function App() {
         setRiichiBySeat(snapshot.riichiBySeat)
         setPostRiichiSafeBySeat(snapshot.postRiichiSafeBySeat)
         setOwnSeat(snapshot.ownSeat)
+      })
+      tracker.onRoundEnd(() => {
+        setAdvice(null)
+        setAdviceError(null)
+        setAdviceTimestamp(null)
       })
       tracker.onGameEnd(() => {
         setHand([])
@@ -164,10 +174,16 @@ function App() {
         setPostRiichiSafeBySeat(snapshot.postRiichiSafeBySeat)
         setOwnSeat(snapshot.ownSeat)
       }
+      setAdvice(null)
+      setAdviceError(null)
+      setAdviceTimestamp(null)
       sampleReturnSnapshot.current = null
       return
     }
 
+    setAdvice(null)
+    setAdviceError(null)
+    setAdviceTimestamp(null)
     sampleReturnSnapshot.current = {
       hand: [...hand],
         discardsBySeat: discardsBySeat.map((row) => [...row]),

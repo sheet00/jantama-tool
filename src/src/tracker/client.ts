@@ -20,6 +20,7 @@ export type TrackerSnapshot = {
 
 export type TrackerListener = (snapshot: TrackerSnapshot) => void
 export type GameEndListener = () => void
+export type RoundEndListener = () => void
 
 const TILE_MAP: Record<string, string> = {
   '0m': '5m', '1m': '1m', '2m': '2m', '3m': '3m', '4m': '4m', '5m': '5m', '6m': '6m', '7m': '7m', '8m': '8m', '9m': '9m',
@@ -113,6 +114,7 @@ export class MahjongSoulTracker {
   private logFile: string | null = null
   private listener: TrackerListener | null = null
   private gameEndListener: GameEndListener | null = null
+  private roundEndListener: RoundEndListener | null = null
   private snapshotMutation: Promise<void> = Promise.resolve()
   private gameEnded = false
 
@@ -122,6 +124,10 @@ export class MahjongSoulTracker {
 
   onGameEnd(listener: GameEndListener): void {
     this.gameEndListener = listener
+  }
+
+  onRoundEnd(listener: RoundEndListener): void {
+    this.roundEndListener = listener
   }
 
   async connect(): Promise<void> {
@@ -326,10 +332,18 @@ export class MahjongSoulTracker {
     const seat = typeof seatValue === 'number' ? seatValue : 0
     const tile = appTile(text(action.find((field) => field.number === 2)?.value ?? 0))
     if (isGameEndAction(name, action)) {
-      this.writeLog(`${name} seat=${seat} tile=${tile ?? '?'} [局終了]`)
+      this.writeLog(`${name} seat=${seat} tile=${tile ?? '?'} [終局]`)
       this.gameEnded = true
       this.lastEvent = { action: name, seat, tile }
+      this.roundEndListener?.()
       this.gameEndListener?.()
+      return
+    }
+    if (isRoundEndAction(name)) {
+      this.writeLog(`${name} seat=${seat} tile=${tile ?? '?'} [局終了]`)
+      this.lastEvent = { action: name, seat, tile }
+      this.roundEndListener?.()
+      this.listener?.(this.snapshot())
       return
     }
     if (name === 'ActionNewRound') {
@@ -442,4 +456,8 @@ function isGameEndAction(name: string, action: ReturnType<typeof fields>): boole
   if (name === 'ActionHule') return action.some((field) => field.number === 6 && field.wireType === 2)
   if (name === 'ActionLiuJu') return action.some((field) => field.number === 2 && field.wireType === 2)
   return false
+}
+
+function isRoundEndAction(name: string): boolean {
+  return name === 'ActionHule' || name === 'ActionNoTile' || name === 'ActionLiuJu'
 }
