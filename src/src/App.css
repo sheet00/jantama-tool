@@ -61,3 +61,143 @@ button { cursor:pointer; }
   border-color: #3b8e76 !important;
 }
 
+/* AI Advice Panel Styles */
+.ai-advice-panel { padding: 22px; }
+.ai-heading-title { display: flex; align-items: flex-start; gap: 10px; }
+.ai-heading-title h2 { font-size: 15px; margin: 0 0 3px; letter-spacing: -.02em; white-space: nowrap; }
+.ai-heading-title p { margin: 0; color: var(--muted); font-size: 10px; }
+.ai-step { color: #5a3ba8; background: #eee8fc; font-weight: 700; flex: none; }
+.advice-timestamp { font-size: 10px; font-weight: 700; color: #5a3ba8; font-family: 'DM Mono', monospace; }
+
+.ai-actions-bar { margin: 0 0 14px; }
+.ai-fetch-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #fff;
+  background: #5a3ba8;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(90, 59, 168, 0.2);
+  transition: all .15s ease;
+}
+.ai-fetch-button:hover:not(:disabled) {
+  background: #4a2e91;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(90, 59, 168, 0.3);
+}
+.ai-fetch-button:disabled { opacity: .65; cursor: wait; }
+.ai-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.ai-empty-prompt {
+  padding: 14px 16px;
+  background: #f8faf9;
+  border: 1px dashed #dce5e0;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+}
+.ai-empty-prompt p { margin: 0; }
+
+.ai-loading-box {
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.ai-pulsing-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #eee8fc;
+  border: 2px solid #8e6cd8;
+  animation: pulseAi 1.5s infinite ease-in-out;
+}
+@keyframes pulseAi {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  50% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.7; }
+}
+
+.ai-error-box {
+  padding: 12px 14px;
+  background: #fff5f4;
+  border: 1px solid #f2c7c4;
+  border-radius: 8px;
+  color: #b2564c;
+  font-size: 11px;
+  margin-bottom: 12px;
+}
+.ai-error-box strong { display: block; margin-bottom: 4px; }
+.ai-error-box p { margin: 0 0 6px; font-size: 10px; }
+
+.ai-content-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: opacity .2s ease;
+}
+.ai-content-area.updating { opacity: 0.6; }
+
+.ai-section-card {
+  border: 1px solid #edf1ef;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fafcfb;
+}
+.ai-section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.ai-section-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: .05em;
+  font-family: 'DM Mono', monospace;
+}
+.ai-section-header strong { font-size: 12px; color: var(--ink); }
+.ai-section-body { font-size: 11px; line-height: 1.6; color: #374741; }
+.ai-paragraph { margin: 0 0 6px; }
+.ai-paragraph:last-child { margin-bottom: 0; }
+.ai-list-item { margin-left: 16px; margin-bottom: 3px; }
+.ai-divider { border: 0; border-top: 1px solid #e7eeea; margin: 8px 0; }
+
+.sec-policy { border-left: 3px solid #1e6653; background: #f4fbf8; }
+.sec-policy .ai-section-badge { background: #dceee7; color: #1e6653; }
+
+.sec-discard { border-left: 3px solid #5a3ba8; background: #f9f7fd; }
+.sec-discard .ai-section-badge { background: #eee8fc; color: #5a3ba8; }
+
+.sec-yaku { border-left: 3px solid #d08f52; background: #fffcf8; }
+.sec-yaku .ai-section-badge { background: #fbeee1; color: #b26c2e; }
+
+.sec-caution { border-left: 3px solid #c94a3e; background: #fff8f7; }
+.sec-caution .ai-section-badge { background: #fde8e7; color: #b2564c; }
+
+.sec-general { border-left: 3px solid #71807b; background: #fafcfb; }
+.sec-general .ai-section-badge { background: #edf1ef; color: #55625e; }
+
+

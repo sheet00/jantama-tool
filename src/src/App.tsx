@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { AnalysisResults } from './components/AnalysisResults'
 import { DangerResults } from './components/DangerResults'
+import { AiAdvice } from './components/AiAdvice'
 import { HandEditor } from './components/HandEditor'
+import { getMahjongAdvice } from './server/advice'
 import { INITIAL_HAND, toTileCounts, TILES } from './domain/tiles'
 import { analyzeDiscards, currentShanten, currentWaits } from './engine/mahjong'
 import { analyzeDanger } from './engine/danger'
@@ -38,6 +40,10 @@ function App() {
   const [history, setHistory] = useState<Snapshot[]>([])
   const [browserStatus, setBrowserStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
   const [sampleMode, setSampleMode] = useState(false)
+  const [advice, setAdvice] = useState<string | null>(null)
+  const [adviceLoading, setAdviceLoading] = useState(false)
+  const [adviceError, setAdviceError] = useState<string | null>(null)
+  const [adviceTimestamp, setAdviceTimestamp] = useState<Date | null>(null)
   const connectionAttempt = useRef(0)
   const sampleModeRef = useRef(false)
   const sampleReturnSnapshot = useRef<Snapshot | null>(null)
@@ -60,6 +66,37 @@ function App() {
     )
     return bestDiscards.map((item) => TILES[item.discard].id)
   }, [analysis])
+
+  const fetchAdvice = useCallback(async () => {
+    if (adviceLoading) return
+    setAdviceLoading(true)
+    setAdviceError(null)
+    try {
+      const payload = {
+        hand,
+        discardsBySeat,
+        meldsBySeat,
+        riichiBySeat,
+        remainingWallTiles,
+        ownSeat,
+        shanten,
+        waits,
+        recommendedDiscards,
+        dangerAssessments,
+      }
+      const res = await getMahjongAdvice({ data: payload })
+      if (!res.ok || !res.advice) {
+        throw new Error(res.error || 'アドバイスの取得に失敗しました')
+      }
+      setAdvice(res.advice)
+      setAdviceTimestamp(new Date())
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'アドバイスの取得に失敗しました'
+      setAdviceError(message)
+    } finally {
+      setAdviceLoading(false)
+    }
+  }, [adviceLoading, hand, discardsBySeat, meldsBySeat, riichiBySeat, remainingWallTiles, ownSeat, shanten, waits, recommendedDiscards, dangerAssessments])
 
   useEffect(() => () => tracker.disconnect(), [tracker])
 
@@ -97,6 +134,9 @@ function App() {
         setPostRiichiSafeBySeat([[], [], [], []])
         setOwnSeat(null)
         setHistory([])
+        setAdvice(null)
+        setAdviceError(null)
+        setAdviceTimestamp(null)
         void tracker.deleteSnapshot()
       })
       await tracker.restoreSnapshot()
@@ -234,12 +274,25 @@ function App() {
     setPostRiichiSafeBySeat([[], [], [], []])
     setOwnSeat(null)
     setHistory([])
+    setAdvice(null)
+    setAdviceError(null)
+    setAdviceTimestamp(null)
   }
 
   return <main className={`app-shell connection-${browserStatus}`}>
     <div className="workspace">
       <HandEditor hand={hand} recommendedDiscards={recommendedDiscards} discardsBySeat={discardsBySeat} meldsBySeat={meldsBySeat} riichiBySeat={riichiBySeat} analysisHandLength={analysisHandLength} shanten={shanten} waits={waits} historyLength={history.length} sampleMode={sampleMode} browserStatus={browserStatus} onRemove={removeTile} onRemoveDiscard={removeDiscard} onRemoveMeldTile={removeMeldTile} onUndo={undo} onReset={reset} onToggleSample={toggleSample} onConnect={connectBrowser} />
-      <aside className="right-column"><DangerResults assessments={dangerAssessments} /><AnalysisResults handLength={hand.length} expectedHandLength={analysisHandLength} analysis={analysis} /></aside>
+      <aside className="right-column">
+        <AiAdvice
+          onGetAdvice={fetchAdvice}
+          loading={adviceLoading}
+          advice={advice}
+          error={adviceError}
+          lastUpdated={adviceTimestamp}
+        />
+        <DangerResults assessments={dangerAssessments} />
+        <AnalysisResults handLength={hand.length} expectedHandLength={analysisHandLength} analysis={analysis} />
+      </aside>
     </div>
     <footer><span>捨て牌と鳴きで公開された牌を見えている牌として考慮</span></footer>
   </main>

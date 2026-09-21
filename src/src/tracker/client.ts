@@ -1,4 +1,5 @@
 import { bytes, decodeBase64, fields, text, xorAction } from './protocol'
+import { saveSnapshotFn, getSnapshotFn, deleteSnapshotFn, appendLogFn } from '../server/tracker'
 
 const AUTH_GAME = '.lq.FastTest.authGame'
 const SYNC_GAME = '.lq.FastTest.syncGame'
@@ -189,10 +190,8 @@ export class MahjongSoulTracker {
   }
 
   async restoreSnapshot(): Promise<void> {
-    const response = await fetch('/tracker/snapshot')
-    if (!response.ok) return
-    const snapshot = await response.json() as Partial<TrackerSnapshot>
-    if (!Array.isArray(snapshot.discards) || !Array.isArray(snapshot.melds)) return
+    const snapshot = (await getSnapshotFn()) as Partial<TrackerSnapshot> | null
+    if (!snapshot || !Array.isArray(snapshot.discards) || !Array.isArray(snapshot.melds)) return
 
     this.hand = Array.isArray(snapshot.hand) ? [...snapshot.hand] : null
     this.discards = Array.from({ length: 4 }, (_, seat) => Array.isArray(snapshot.discards?.[seat]) ? [...snapshot.discards[seat]] : [])
@@ -211,17 +210,13 @@ export class MahjongSoulTracker {
     if (!this.isConnected() || this.gameEnded) return
     const snapshot = this.snapshot()
     await this.queueSnapshotMutation(async () => {
-      await fetch('/tracker/snapshot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(snapshot),
-      })
+      await saveSnapshotFn({ data: snapshot })
     })
   }
 
   async deleteSnapshot(): Promise<void> {
     await this.queueSnapshotMutation(async () => {
-      await fetch('/tracker/snapshot', { method: 'DELETE' })
+      await deleteSnapshotFn()
     })
   }
 
@@ -243,11 +238,7 @@ export class MahjongSoulTracker {
     const ss = String(now.getSeconds()).padStart(2, '0')
     const ms = String(now.getMilliseconds()).padStart(3, '0')
     const full = `[${hh}:${mm}:${ss}.${ms}] ${line}`
-    fetch('/tracker/log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ logFile: this.logFile, line: full }),
-    }).catch(() => undefined)
+    void appendLogFn({ data: { logFile: this.logFile, line: full } })
   }
 
   private handleMessage(raw: unknown): void {
