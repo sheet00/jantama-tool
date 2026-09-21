@@ -283,16 +283,16 @@ function App() {
     <div className="workspace">
       <HandEditor hand={hand} recommendedDiscards={recommendedDiscards} discardsBySeat={discardsBySeat} meldsBySeat={meldsBySeat} riichiBySeat={riichiBySeat} analysisHandLength={analysisHandLength} shanten={shanten} waits={waits} historyLength={history.length} sampleMode={sampleMode} browserStatus={browserStatus} onRemove={removeTile} onRemoveDiscard={removeDiscard} onRemoveMeldTile={removeMeldTile} onUndo={undo} onReset={reset} onToggleSample={toggleSample} onConnect={connectBrowser} />
       <aside className="right-column">
-        <AiAdvice
-          onGetAdvice={fetchAdvice}
-          loading={adviceLoading}
-          advice={advice}
-          error={adviceError}
-          lastUpdated={adviceTimestamp}
-        />
         <DangerResults assessments={dangerAssessments} />
         <AnalysisResults handLength={hand.length} expectedHandLength={analysisHandLength} analysis={analysis} />
       </aside>
+      <AiAdvice
+        onGetAdvice={fetchAdvice}
+        loading={adviceLoading}
+        advice={advice}
+        error={adviceError}
+        lastUpdated={adviceTimestamp}
+      />
     </div>
     <footer><span>捨て牌と鳴きで公開された牌を見えている牌として考慮</span></footer>
   </main>
